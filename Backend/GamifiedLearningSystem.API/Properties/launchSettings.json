@@ -1,0 +1,24 @@
+{
+  "profiles": {
+    "Game (Visual Studio)": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "launchUrl": "http://localhost:8080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "LocalDevelopment__StartServices": "true",
+        "LocalDevelopment__OpenBrowser": "true"
+      }
+    },
+    "GamifiedLearningSystem.API": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "launchUrl": "http://localhost:8080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "LocalDevelopment__StartServices": "true",
+        "LocalDevelopment__OpenBrowser": "true"
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "album": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023",
+  "game": "Brain Show",
+  "developer": "Simplicity Games",
+  "tracks": [
+    {
+      "title": "01. Menu",
+      "file": "menu.mp3",
+      "bytes": 2243611,
+      "sourcePage": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023/01.%20Menu.mp3"
+    },
+    {
+      "title": "02. Character Selection",
+      "file": "character-selection.mp3",
+      "bytes": 2276163,
+      "sourcePage": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023/02.%20Character%20Selection.mp3"
+    },
+    {
+      "title": "03. Jingle",
+      "file": "jingle.mp3",
+      "bytes": 527004,
+      "sourcePage": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023/03.%20Jingle.mp3"
+    },
+    {
+      "title": "04. Other Music",
+      "file": "other-music.mp3",
+      "bytes": 4032176,
+      "sourcePage": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023/04.%20Other%20Music.mp3"
+    },
+    {
+      "title": "05. Short jingle",
+      "file": "short-jingle.mp3",
+      "bytes": 284748,
+      "sourcePage": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023/05.%20Short%20jingle.mp3"
+    },
+    {
+      "title": "06. Final Round",
+      "file": "final-round.mp3",
+      "bytes": 4069453,
+      "sourcePage": "https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023/06.%20Final%20Round.mp3"
+    }
+  ]
+}

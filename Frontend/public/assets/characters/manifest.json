@@ -1,0 +1,51 @@
+{
+  "license": "CC0-1.0",
+  "author": "Quaternius",
+  "characters": {
+    "nova": {
+      "file": "nova.gltf",
+      "height": 1.85,
+      "rotationY": 0,
+      "source": "Ultimate Modular Women - Casual",
+      "originalFilename": "Casual.gltf",
+      "sha256": "b0fe6e92219cd71808844a20a1a8b960fd1cf640a6546dc6362b5add6604e87c",
+      "byteLength": 3131788
+    },
+    "maya": {
+      "file": "maya.gltf",
+      "height": 1.85,
+      "rotationY": 0,
+      "source": "Ultimate Modular Women - Formal",
+      "originalFilename": "Formal.gltf",
+      "sha256": "fdfcf454c4de037d31973eb28d8591bd7763035d49f46b380e63b1c832dc7ddf",
+      "byteLength": 3082953
+    },
+    "leo": {
+      "file": "leo.gltf",
+      "height": 1.9,
+      "rotationY": 0,
+      "source": "Ultimate Modular Men - Casual_Hoodie",
+      "originalFilename": "Casual_Hoodie.gltf",
+      "sha256": "dd74886c26998a0fa888b4ce557a0932d7d97b0265dd4c763154d081b7a6cb98",
+      "byteLength": 3104001
+    },
+    "atlas": {
+      "file": "atlas.gltf",
+      "height": 1.9,
+      "rotationY": 0,
+      "source": "Ultimate Modular Men - Casual_2",
+      "originalFilename": "Casual_2.gltf",
+      "sha256": "55c654d09a2a5ff6e3bd6158d4a1b462f181cd6f1e12a0f5e9d959f9c3abc438",
+      "byteLength": 3058092
+    },
+    "orion": {
+      "file": "orion.gltf",
+      "height": 1.95,
+      "rotationY": 0,
+      "source": "Ultimate Modular Men - Suit",
+      "originalFilename": "Suit.gltf",
+      "sha256": "6c89fbb31b96c1a63ad94e3dee0942bd7b34bc789a5d39fd6a6a1738a9214fb3",
+      "byteLength": 3315342
+    }
+  }
+}

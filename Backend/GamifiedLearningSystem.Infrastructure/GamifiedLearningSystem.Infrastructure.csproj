@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="../GamifiedLearningSystem.Application/GamifiedLearningSystem.Application.csproj"/><PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0"/></ItemGroup></Project>

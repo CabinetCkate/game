@@ -1,0 +1,25 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+.env
+**/.env
+*.log
+TestResults/
+artifacts/
+**/App_Data/
+.vs/
+*.csproj.user
+*.suo
+
+# Local settings, caches, and generated reports
+.env.*
+!.env.example
+**/.vs/
+**/.npm-cache/
+**/test-results/
+**/playwright-report/
+*.pfx
+*.p12
+*.key
+/SQLQuery1.sql

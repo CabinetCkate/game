@@ -1,0 +1,50 @@
+name: Verify
+on: [push, pull_request]
+jobs:
+  build-and-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: integration-root
+          MYSQL_DATABASE: gamified_learning
+          MYSQL_USER: learning
+          MYSQL_PASSWORD: integration-db
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -pintegration-root"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      DATABASE_URL: mysql://learning:integration-db@127.0.0.1:3306/gamified_learning
+      JWT_SECRET: integration-only-jwt-key-32-characters-minimum
+      DATA_SERVICE_KEY: integration-only-private-key-32-characters-minimum
+      RUN_LIVE_E2E: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: {dotnet-version: '9.0.x'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: dotnet build GamifiedLearningSystem.sln && dotnet run --project Tests/GamifiedLearningSystem.Tests
+      - run: npm ci && npx prisma generate && npm run build && npx prisma migrate deploy && npx prisma db seed && npx prisma db seed
+        working-directory: PrismaService
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+        working-directory: Frontend
+      - name: Start services
+        run: |
+          (cd PrismaService && npm start > ../data.log 2>&1) &
+          dotnet run --no-build --project Backend/GamifiedLearningSystem.API --urls http://localhost:5080 > api.log 2>&1 &
+          (cd Frontend && npm run dev > ../frontend.log 2>&1) &
+          for i in $(seq 1 30); do curl --fail http://localhost:5080/health && break || sleep 2; done
+      - run: npm run test:e2e
+        working-directory: Frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-evidence
+          path: |
+            artifacts/
+            Frontend/test-results/
+            *.log

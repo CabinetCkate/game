@@ -1,0 +1,37 @@
+services:
+  prisma-service:
+    build: ./PrismaService
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for SQL Server}
+      DATA_SERVICE_KEY: ${DATA_SERVICE_KEY:?Set DATA_SERVICE_KEY}
+      PORT: 4000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+  aspnet-api:
+    build: {context: ., dockerfile: Backend/Dockerfile}
+    environment:
+      ASPNETCORE_URLS: http://+:5080
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      DATA_SERVICE_KEY: ${DATA_SERVICE_KEY}
+      DataService__Url: http://prisma-service:4000/
+      FrontendUrl: ${PUBLIC_URL:-http://localhost:8080}
+      Cors__Origins__0: ${PUBLIC_URL:-http://localhost:8080}
+      AllowedHosts: ${PUBLIC_HOSTS:-localhost;127.0.0.1;aspnet-api}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+    ports: ["127.0.0.1:5080:5080"]
+    volumes: ["reset_mail:/app/artifacts/mail", "quiz_library:/app/App_Data/quiz-library"]
+    depends_on:
+      prisma-service: {condition: service_healthy}
+  frontend:
+    build: ./Frontend
+    ports: ["${FRONTEND_BIND:-127.0.0.1}:8080:80"]
+    depends_on: [aspnet-api]
+volumes:
+  reset_mail:
+  quiz_library:

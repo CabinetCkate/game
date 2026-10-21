@@ -1,0 +1,21 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+const album='https://downloads.khinsider.com/game-soundtracks/album/brain-show-gamerip-2023';
+const target=new URL('../Frontend/public/audio/brain-show/',import.meta.url);
+const tracks=[['01. Menu','menu'],['02. Character Selection','character-selection'],['03. Jingle','jingle'],['04. Other Music','other-music'],['05. Short jingle','short-jingle'],['06. Final Round','final-round']];
+await mkdir(target,{recursive:true});
+const manifest=await Promise.all(tracks.map(async([title,name])=>{
+ const page=album+'/'+encodeURIComponent(title+'.mp3');
+ const response=await fetch(page,{headers:{'User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(25000)});
+ if(!response.ok)throw Error(`Track page unavailable: ${name} (${response.status})`);
+ const html=await response.text();
+ const url=[...html.matchAll(/https:\/\/[^\s"<>]+\.mp3/g)].map(match=>match[0]).find(value=>new URL(value).hostname.endsWith('.vgmtreasurechest.com'));
+ if(!url)throw Error('MP3 download missing: '+name);
+ const audio=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0','Referer':page},signal:AbortSignal.timeout(45000)});
+ if(!audio.ok)throw Error(`MP3 unavailable: ${name} (${audio.status})`);
+ const data=new Uint8Array(await audio.arrayBuffer());
+ if(data.length<10000||!(data[0]===0x49&&data[1]===0x44&&data[2]===0x33||data[0]===0xff&&(data[1]&0xe0)===0xe0))throw Error('Invalid MP3: '+name);
+ await writeFile(new URL(name+'.mp3',target),data);
+ return {title,file:name+'.mp3',bytes:data.length,sourcePage:page};
+}));
+await writeFile(new URL('source.json',target),JSON.stringify({album,game:'Brain Show',developer:'Simplicity Games',tracks:manifest},null,2)+'\n');
+console.log(JSON.stringify({downloaded:manifest.length,bytes:manifest.reduce((total,track)=>total+track.bytes,0)}));

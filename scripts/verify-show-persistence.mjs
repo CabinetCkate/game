@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {createRequire} from 'node:module';
+const {showBank}=createRequire(import.meta.url)('../PrismaService/dist/prisma/show-bank.js'),bank=new Map(showBank.tasks.map(t=>[t.id,t])),file='artifacts/show-persistence-report.json';
+async function api(path,body,token){if(body!==undefined&&path.endsWith('/answer')){const state=await api(path.slice(0,-7),undefined,token);if(state.phase==='question'&&state.questionIndex===body.questionIndex){const wait=Date.parse(state.currentQuestion.startedAt)-Date.parse(state.serverNow);if(wait>0)await new Promise(resolve=>setTimeout(resolve,wait+100));}}const response=await fetch('http://localhost:5080/api/'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();assert.equal(response.status,200,path+' '+JSON.stringify(result));return result;}
+if(process.argv.includes('--prepare')){
+ const email='persistence-'+Date.now()+'@example.com',auth=await api('auth/register',{email,firstName:'Persistence',lastName:'Test',password:'Student123!',confirmPassword:'Student123!'}),token=auth.accessToken;
+ let game=await api('show/start',{courseId:'informatics-show',characterId:'leo'},token);game=await api('show/'+game.id+'/next',{questionIndex:0},token);
+ for(let i=0;i<4;i++){game=await api('show/'+game.id+'/answer',{questionIndex:i,answer:bank.get(game.currentQuestion.taskId).correctAnswer,requestId:crypto.randomUUID(),wager:0},token);game=await api('show/'+game.id+'/next',{questionIndex:i},token);}
+ game=await api('show/'+game.id+'/wager',{questionIndex:4,wager:100},token);const stats=await api('statistics',undefined,token);
+ const report={email,sessionId:game.id,deadline:game.currentQuestion.deadline,questionIndex:4,scoreBefore:game.participants[0].score,totalXP:stats.totalXP,preparedAt:new Date().toISOString()};await fs.writeFile(file,JSON.stringify(report,null,2));console.log({prepared:true,sessionId:game.id,deadline:report.deadline,stake:100,totalXP:report.totalXP});
+}else{
+ const report=JSON.parse(await fs.readFile(file,'utf8')),auth=await api('auth/login',{email:report.email,password:'Student123!'}),token=auth.accessToken;
+ let game=await api('show/active',undefined,token);assert.equal(game.id,report.sessionId);assert.equal(game.questionIndex,report.questionIndex);
+ if(game.phase==='question'){assert.equal(game.currentQuestion.wager,100);assert.equal(game.currentQuestion.wagerLocked,true);const wait=Math.max(0,Date.parse(report.deadline)-Date.now()+100);console.log('Restored live wager; waiting',wait,'ms for original deadline');await new Promise(resolve=>setTimeout(resolve,wait));game=await api('show/'+game.id,undefined,token);}
+ assert.equal(game.phase,'feedback');assert.equal(game.feedback.timedOut,true);assert.equal(game.feedback.isCorrect,false);assert.equal(game.feedback.scoreDelta,-100);assert.equal(game.participants[0].score,report.scoreBefore-100);assert.equal(game.feedback.xpEarned,0);assert.equal((await api('statistics',undefined,token)).totalXP,report.totalXP);report.verifiedAt=new Date().toISOString();report.checks=['API and data service restart','login after restart','saved match restored','original deadline unchanged','committed stake lost on timeout','learning XP preserved'];await fs.writeFile(file,JSON.stringify(report,null,2));await api('show/'+game.id+'/abandon',{},token);console.log(report.checks);
+}

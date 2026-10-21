@@ -1,0 +1,355 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "sqlserver"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(uuid()) @db.VarChar(36)
+  email String @unique @db.VarChar(191)
+  passwordHash String @db.VarChar(512)
+  role String @default("STUDENT") @db.VarChar(20)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student Student?
+  refreshTokens RefreshToken[]
+  resetTokens PasswordResetToken[]
+  @@map("Users")
+}
+model Student {
+  id String @id @default(uuid()) @db.VarChar(36)
+  userId String @unique @db.VarChar(36)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  firstName String @db.VarChar(80)
+  lastName String @db.VarChar(80)
+  avatarUrl String @default("")
+  bio String @default("") @db.NVarChar(Max)
+  totalXP Int @default(0)
+  level Int @default(1)
+  currentStreak Int @default(0)
+  longestStreak Int @default(0)
+  lastActivityAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempts Attempt[]
+  xpEvents XpEvent[]
+  achievements StudentAchievement[]
+  leaderboardEntries LeaderboardEntry[]
+  seasons StudentSeason[]
+  dailyGoals StudentDailyGoal[]
+  streak Streak?
+  hints Hint[]
+  notifications Notification[]
+  topicProgress StudentTopicProgress[]
+  recommendations AIRecommendation[]
+  sessions TaskSession[]
+  reports TaskReport[]
+  shows ShowSession[]
+  @@index([totalXP])
+  @@map("Students")
+}
+model Course {
+  id String @id @default(uuid()) @db.VarChar(36)
+  title String
+  description String @db.NVarChar(Max)
+  category String
+  imageUrl String @default("")
+  difficulty String @default("EASY") @db.VarChar(20)
+  estimatedMinutes Int
+  isPublished Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  levels Level[]
+  topics Topic[]
+  @@map("Courses")
+}
+model Level {
+  id String @id @default(uuid()) @db.VarChar(36)
+  courseId String @db.VarChar(36)
+  course Course @relation(fields:[courseId], references:[id], onDelete:Cascade)
+  title String
+  description String @db.NVarChar(Max)
+  order Int
+  requiredXP Int @default(0)
+  isLocked Boolean @default(false)
+  createdAt DateTime @default(now())
+  tasks Task[]
+  @@unique([courseId,order])
+  @@map("Levels")
+}
+model Topic {
+  id String @id @default(uuid()) @db.VarChar(36)
+  name String
+  description String @db.NVarChar(Max)
+  courseId String @db.VarChar(36)
+  course Course @relation(fields:[courseId], references:[id], onDelete:Cascade)
+  tasks Task[]
+  progress StudentTopicProgress[]
+  @@index([courseId])
+  @@map("Topics")
+}
+model Task {
+  id String @id @default(uuid()) @db.VarChar(36)
+  levelId String @db.VarChar(36)
+  level Level @relation(fields:[levelId], references:[id], onDelete:Cascade)
+  topicId String @db.VarChar(36)
+  topic Topic @relation(fields:[topicId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  title String
+  description String @db.NVarChar(Max)
+  question String @db.NVarChar(Max)
+  difficulty String @default("EASY") @db.VarChar(20)
+  taskType String @default("MULTIPLE_CHOICE") @db.VarChar(30)
+  content String @default("{}") @db.NVarChar(Max)
+  xpReward Int @default(100)
+  timeLimit Int @default(120)
+  hint String @db.NVarChar(Max)
+  correctAnswer String
+  explanation String @db.NVarChar(Max)
+  order Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  options TaskOption[]
+  attempts Attempt[]
+  hints Hint[]
+  sessions TaskSession[]
+  reports TaskReport[]
+  @@unique([levelId,order])
+  @@index([topicId,difficulty])
+  @@map("Tasks")
+}
+model TaskOption {
+  id String @id @default(uuid()) @db.VarChar(36)
+  taskId String @db.VarChar(36)
+  task Task @relation(fields:[taskId], references:[id], onDelete:Cascade)
+  text String
+  order Int
+  @@unique([taskId,order])
+  @@map("TaskOptions")
+}
+model Attempt {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  taskId String @db.VarChar(36)
+  task Task @relation(fields:[taskId], references:[id], onDelete:Cascade)
+  answer String
+  isCorrect Boolean
+  score Int
+  xpEarned Int
+  timeSpent Int
+  attemptNumber Int
+  requestId String @db.VarChar(36)
+  result String @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+  @@unique([studentId,requestId])
+  @@unique([studentId,taskId,attemptNumber])
+  @@index([studentId,createdAt])
+  @@index([taskId])
+  @@map("Attempts")
+}
+model XpEvent {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  amount Int
+  source String
+  sourceId String
+  createdAt DateTime @default(now())
+  @@unique([studentId,source,sourceId])
+  @@index([studentId,createdAt])
+  @@map("XpEvents")
+}
+model Achievement {
+  id String @id @default(uuid()) @db.VarChar(36)
+  code String @unique
+  title String
+  description String @db.NVarChar(Max)
+  icon String
+  condition String
+  target Int
+  xpReward Int @default(300)
+  students StudentAchievement[]
+  @@map("Achievements")
+}
+model StudentAchievement {
+  studentId String @db.VarChar(36)
+  achievementId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  achievement Achievement @relation(fields:[achievementId], references:[id], onDelete:Cascade)
+  unlockedAt DateTime @default(now())
+  @@id([studentId,achievementId])
+  @@map("StudentAchievements")
+}
+model Leaderboard {
+  id String @id @default(uuid()) @db.VarChar(36)
+  name String
+  period String @unique
+  entries LeaderboardEntry[]
+  @@map("Leaderboards")
+}
+model LeaderboardEntry {
+  leaderboardId String @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  leaderboard Leaderboard @relation(fields:[leaderboardId], references:[id], onDelete:Cascade)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  xp Int @default(0)
+  updatedAt DateTime @updatedAt
+  @@id([leaderboardId,studentId])
+  @@index([xp])
+  @@map("LeaderboardEntries")
+}
+model Season {
+  id String @id @default(uuid()) @db.VarChar(36)
+  title String
+  description String @db.NVarChar(Max)
+  startsAt DateTime
+  endsAt DateTime
+  rewards String @db.NVarChar(Max)
+  finalizedAt DateTime?
+  students StudentSeason[]
+  @@map("Seasons")
+}
+model StudentSeason {
+  studentId String @db.VarChar(36)
+  seasonId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  season Season @relation(fields:[seasonId], references:[id], onDelete:Cascade)
+  xp Int @default(0)
+  finalRank Int?
+  badge String?
+  @@id([studentId,seasonId])
+  @@map("StudentSeasons")
+}
+model DailyGoal {
+  id String @id @default(uuid()) @db.VarChar(36)
+  title String
+  target Int
+  xpReward Int @default(200)
+  isActive Boolean @default(true)
+  students StudentDailyGoal[]
+  @@map("DailyGoals")
+}
+model StudentDailyGoal {
+  studentId String @db.VarChar(36)
+  dailyGoalId String @db.VarChar(36)
+  date String @db.VarChar(10)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  goal DailyGoal @relation(fields:[dailyGoalId], references:[id], onDelete:Cascade)
+  progress Int @default(0)
+  completedAt DateTime?
+  @@id([studentId,dailyGoalId,date])
+  @@map("StudentDailyGoals")
+}
+model Streak {
+  studentId String @id @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  current Int @default(0)
+  longest Int @default(0)
+  lastDate String? @db.VarChar(10)
+  @@map("Streaks")
+}
+model Hint {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  taskId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  task Task @relation(fields:[taskId], references:[id], onDelete:Cascade)
+  text String @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+  @@index([studentId,taskId])
+  @@map("Hints")
+}
+model Notification {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  title String
+  message String @db.NVarChar(Max)
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([studentId,createdAt])
+  @@map("Notifications")
+}
+model StudentTopicProgress {
+  studentId String @db.VarChar(36)
+  topicId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  topic Topic @relation(fields:[topicId], references:[id], onDelete:Cascade)
+  correct Int @default(0)
+  wrong Int @default(0)
+  @@id([studentId,topicId])
+  @@map("StudentTopicProgress")
+}
+model AIRecommendation {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  taskId String @db.VarChar(36)
+  reason String @db.NVarChar(Max)
+  source String
+  createdAt DateTime @default(now())
+  @@index([studentId,createdAt])
+  @@map("AIRecommendations")
+}
+model RefreshToken {
+  id String @id @default(uuid()) @db.VarChar(36)
+  userId String @db.VarChar(36)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  tokenHash String @unique @db.VarChar(64)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@map("RefreshTokens")
+}
+model PasswordResetToken {
+  id String @id @default(uuid()) @db.VarChar(36)
+  userId String @db.VarChar(36)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  tokenHash String @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt DateTime?
+}
+model TaskSession {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  taskId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  task Task @relation(fields:[taskId], references:[id], onDelete:Cascade)
+  startedAt DateTime @default(now())
+  submittedAt DateTime?
+  @@index([studentId,taskId])
+}
+model TaskReport {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  taskId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  task Task @relation(fields:[taskId], references:[id], onDelete:Cascade)
+  message String @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+}
+model Setting {
+  key String @id
+  value String @db.NVarChar(Max)
+}
+
+// The JSON state contains the private bot plan and task-session identifiers.
+// Only the explicit public projection in services/show.ts may reach clients.
+model ShowSession {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  courseId String @db.VarChar(36)
+  characterId String @db.VarChar(20)
+  status String @default("ACTIVE") @db.VarChar(20)
+  state String @db.NVarChar(Max)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  @@index([studentId,status,updatedAt])
+  @@map("ShowSessions")
+}

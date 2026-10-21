@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "Game (Visual Studio)",
+    "Projects": [
+      {
+        "Path": "Backend\\GamifiedLearningSystem.API\\GamifiedLearningSystem.API.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

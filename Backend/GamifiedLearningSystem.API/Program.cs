@@ -1,0 +1,60 @@
+using System.Text;
+using System.Threading.RateLimiting;
+using GamifiedLearningSystem.Application.AI;
+using GamifiedLearningSystem.Application.Interfaces;
+using GamifiedLearningSystem.Application.Services;
+using GamifiedLearningSystem.Domain;
+using GamifiedLearningSystem.Infrastructure.Repositories;
+using GamifiedLearningSystem.Infrastructure.Services;
+using GamifiedLearningSystem.API.Middleware;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using Serilog;
+using GamifiedLearningSystem.API.Multiplayer;
+using GamifiedLearningSystem.API.Configuration;
+
+var builder=WebApplication.CreateBuilder(args);
+var config=builder.Configuration;
+var localEnvironment=LocalEnvironment.Read(builder.Environment.ContentRootPath);
+var apiUrl=LocalEnvironment.ApiUrl(config["urls"],Environment.GetEnvironmentVariable("API_PORT"),localEnvironment);
+builder.WebHost.UseUrls(apiUrl);
+foreach(var pair in new[]{("JWT_SECRET","Jwt:Secret"),("DATA_SERVICE_KEY","DataService:Key"),("AI_API_KEY","AI:ApiKey"),("AI_BASE_URL","AI:BaseUrl"),("AI_MODEL","AI:Model")})
+ if(Environment.GetEnvironmentVariable(pair.Item1) is {Length:>0} value)config[pair.Item2]=value;
+ else if(string.IsNullOrEmpty(config[pair.Item2])&&localEnvironment.TryGetValue(pair.Item1,out var localValue))config[pair.Item2]=localValue;
+if(config["Jwt:Secret"] is not {Length:>=32}||config["DataService:Key"] is not {Length:>=32})throw new InvalidOperationException("Set JWT_SECRET and DATA_SERVICE_KEY to distinct secrets of at least 32 characters.");
+builder.Host.UseSerilog((_,logger)=>logger.WriteTo.Console());
+if(builder.Environment.IsDevelopment()&&config.GetValue<bool>("LocalDevelopment:StartServices"))
+ builder.Services.AddHostedService(sp=>new LocalDevelopmentServices(builder.Environment,config,apiUrl,sp.GetRequiredService<ILogger<LocalDevelopmentServices>>()));
+builder.Services.AddControllers().AddJsonOptions(o=>o.JsonSerializerOptions.UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow);
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(o=>{o.SwaggerDoc("v1",new(){Title="Gamified Learning System",Version="v1"});o.AddSecurityDefinition("Bearer",new(){Type=SecuritySchemeType.Http,Scheme="bearer",BearerFormat="JWT"});o.AddSecurityRequirement(new(){[new(){Reference=new(){Type=ReferenceType.SecurityScheme,Id="Bearer"}}]=Array.Empty<string>()});});
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o=>{
+ o.TokenValidationParameters=new(){ValidateIssuer=true,ValidateAudience=true,ValidateLifetime=true,ValidateIssuerSigningKey=true,ValidIssuer=config["Jwt:Issuer"],ValidAudience=config["Jwt:Audience"],IssuerSigningKey=new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Secret"]!)),ClockSkew=TimeSpan.FromSeconds(30)};
+ o.Events=new JwtBearerEvents{OnMessageReceived=context=>{if(context.Request.Path.StartsWithSegments("/api/hubs/game")&&context.Request.Query.TryGetValue("access_token",out var token))context.Token=token;return Task.CompletedTask;}};
+});
+builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=131072;o.MaximumParallelInvocationsPerClient=1;});
+builder.Services.AddSingleton<MultiplayerService>();
+builder.Services.AddSingleton<GamifiedLearningSystem.API.QuizLibrary.QuizLibraryStore>();
+builder.Services.AddHostedService(sp=>sp.GetRequiredService<MultiplayerService>());
+builder.Services.AddAuthorization();
+builder.Services.AddCors(o=>o.AddDefaultPolicy(p=>p.WithOrigins(config.GetSection("Cors:Origins").Get<string[]>()??["http://localhost:8080"]).AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddRateLimiter(o=>{
+ o.RejectionStatusCode=429;
+ o.GlobalLimiter=PartitionedRateLimiter.Create<HttpContext,string>(ctx=>RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString()??"unknown",_=>new(){PermitLimit=120,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
+ o.AddPolicy("auth",ctx=>RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString()??"unknown",_=>new(){PermitLimit=10,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
+ o.AddPolicy("session",ctx=>RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString()??"unknown",_=>new(){PermitLimit=120,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
+});
+builder.Services.AddHttpClient<IDataRepository,PrismaRepository>(http=>{http.BaseAddress=new(config["DataService:Url"]!);http.DefaultRequestHeaders.Add("X-Service-Key",config["DataService:Key"]);http.Timeout=TimeSpan.FromSeconds(30);});
+builder.Services.AddSingleton(new GamificationEngine(config.GetSection("Game:LevelThresholds").Get<int[]>()??[0,500,1200,2500,5000,9000,15000,25000]));
+builder.Services.AddScoped<ITokenIssuer,JwtTokenIssuer>();builder.Services.AddScoped<AuthService>();builder.Services.AddScoped<LearningService>();builder.Services.AddScoped<FallbackAIService>();
+builder.Services.AddScoped<ShowService>();
+builder.Services.AddHttpClient<IAIService,OpenAIService>(http=>http.Timeout=TimeSpan.FromSeconds(90));
+var app=builder.Build();
+app.UseMiddleware<GlobalExceptionMiddleware>();
+app.Use(async(ctx,next)=>{ctx.Response.Headers["X-Content-Type-Options"]="nosniff";ctx.Response.Headers["X-Frame-Options"]="DENY";ctx.Response.Headers["Referrer-Policy"]="strict-origin-when-cross-origin";await next();});
+app.UseSerilogRequestLogging();app.UseCors();app.UseRateLimiter();app.UseAuthentication();app.UseAuthorization();
+app.UseSwagger();app.UseSwaggerUI();app.MapControllers();
+app.MapHub<GameHub>("/api/hubs/game",o=>o.CloseOnAuthenticationExpiration=true);
+app.MapGet("/health",async(IDataRepository data,CancellationToken ct)=>{await data.SendAsync(HttpMethod.Get,"health/ready",null,ct);return Results.Ok(new{status="healthy"});});
+app.Run();

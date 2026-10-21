@@ -1,0 +1,214 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36623.8
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Backend", "Backend", "{1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GamifiedLearningSystem.API", "Backend\GamifiedLearningSystem.API\GamifiedLearningSystem.API.csproj", "{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GamifiedLearningSystem.Application", "Backend\GamifiedLearningSystem.Application\GamifiedLearningSystem.Application.csproj", "{6F0759E1-6045-4FF2-A19F-3762D5819B59}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GamifiedLearningSystem.Domain", "Backend\GamifiedLearningSystem.Domain\GamifiedLearningSystem.Domain.csproj", "{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GamifiedLearningSystem.Infrastructure", "Backend\GamifiedLearningSystem.Infrastructure\GamifiedLearningSystem.Infrastructure.csproj", "{40457B22-81A6-4C6C-B54A-D66716F9AC1F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{32112C76-F2B6-5D5F-86AF-3E7A9CC0A07D}"
+	ProjectSection(SolutionItems) = preProject
+		.env.example = .env.example
+		.vsconfig = .vsconfig
+		GamifiedLearningSystem.slnLaunch = GamifiedLearningSystem.slnLaunch
+		Open-in-Visual-Studio.cmd = Open-in-Visual-Studio.cmd
+		README.md = README.md
+		Start-Game.cmd = Start-Game.cmd
+		docker-compose.yml = docker-compose.yml
+		global.json = global.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Frontend", "Frontend", "{7F840A28-147C-535C-BD95-9BD1D71B6D61}"
+	ProjectSection(SolutionItems) = preProject
+		Frontend\index.html = Frontend\index.html
+		Frontend\package.json = Frontend\package.json
+		Frontend\src\i18n.js = Frontend\src\i18n.js
+		Frontend\src\learning-help.js = Frontend\src\learning-help.js
+		Frontend\src\learning-messages.js = Frontend\src\learning-messages.js
+		Frontend\src\main.js = Frontend\src\main.js
+		Frontend\src\multiplayer.js = Frontend\src\multiplayer.js
+		Frontend\src\practice-form.js = Frontend\src\practice-form.js
+		Frontend\src\preferences.js = Frontend\src\preferences.js
+		Frontend\src\request-id.js = Frontend\src\request-id.js
+		Frontend\src\request.js = Frontend\src\request.js
+		Frontend\src\show-audio.js = Frontend\src\show-audio.js
+		Frontend\src\show-cinematics.js = Frontend\src\show-cinematics.js
+		Frontend\src\show-soundtrack.js = Frontend\src\show-soundtrack.js
+		Frontend\src\show-studio.js = Frontend\src\show-studio.js
+		Frontend\src\show.css = Frontend\src\show.css
+		Frontend\src\show.js = Frontend\src\show.js
+		Frontend\src\style.css = Frontend\src\style.css
+		Frontend\vite.config.js = Frontend\vite.config.js
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PrismaService", "PrismaService", "{3DFB2EAD-0D6B-5F37-BAB3-EF6D322689C8}"
+	ProjectSection(SolutionItems) = preProject
+		PrismaService\package.json = PrismaService\package.json
+		PrismaService\prisma\schema.prisma = PrismaService\prisma\schema.prisma
+		PrismaService\prisma\seed-show.ts = PrismaService\prisma\seed-show.ts
+		PrismaService\prisma\seed.ts = PrismaService\prisma\seed.ts
+		PrismaService\prisma\show-bank.ts = PrismaService\prisma\show-bank.ts
+		PrismaService\prisma\show-informatics-locales.ts = PrismaService\prisma\show-informatics-locales.ts
+		PrismaService\prisma\show-subjects.ts = PrismaService\prisma\show-subjects.ts
+		PrismaService\src\environment.ts = PrismaService\src\environment.ts
+		PrismaService\src\prisma.ts = PrismaService\src\prisma.ts
+		PrismaService\src\routes\admin.ts = PrismaService\src\routes\admin.ts
+		PrismaService\src\routes\auth.ts = PrismaService\src\routes\auth.ts
+		PrismaService\src\server.ts = PrismaService\src\server.ts
+		PrismaService\src\services\game.ts = PrismaService\src\services\game.ts
+		PrismaService\src\services\learning-insights.ts = PrismaService\src\services\learning-insights.ts
+		PrismaService\src\services\queries.ts = PrismaService\src\services\queries.ts
+		PrismaService\src\services\show-localization.ts = PrismaService\src\services\show-localization.ts
+		PrismaService\src\services\show-rules.ts = PrismaService\src\services\show-rules.ts
+		PrismaService\src\services\show.ts = PrismaService\src\services\show.ts
+		PrismaService\tsconfig.json = PrismaService\tsconfig.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Database", "Database", "{5495C4C4-9707-5C73-A126-C7E4BD9B1BCB}"
+	ProjectSection(SolutionItems) = preProject
+		database\sqlserver\01_CreateGamifiedLearningSystem.sql = database\sqlserver\01_CreateGamifiedLearningSystem.sql
+		database\sqlserver\02_CreateApplicationLogin.sql = database\sqlserver\02_CreateApplicationLogin.sql
+		database\sqlserver\03_ShowSessions.sql = database\sqlserver\03_ShowSessions.sql
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{D8E9B87D-ACD3-536A-B4AE-2D9C8F1D3912}"
+	ProjectSection(SolutionItems) = preProject
+		scripts\Apply-ShowMigration.ps1 = scripts\Apply-ShowMigration.ps1
+		scripts\Fetch-ShowAssets.mjs = scripts\Fetch-ShowAssets.mjs
+		scripts\Import-Environment.ps1 = scripts\Import-Environment.ps1
+		scripts\Initialize.ps1 = scripts\Initialize.ps1
+		scripts\Open-VisualStudio.ps1 = scripts\Open-VisualStudio.ps1
+		scripts\Start-Local.ps1 = scripts\Start-Local.ps1
+		scripts\download-brain-show.mjs = scripts\download-brain-show.mjs
+		scripts\test-stack.mjs = scripts\test-stack.mjs
+		scripts\verify-ai-provider.mjs = scripts\verify-ai-provider.mjs
+		scripts\verify-ai-room.mjs = scripts\verify-ai-room.mjs
+		scripts\verify-local-startup.mjs = scripts\verify-local-startup.mjs
+		scripts\verify-prepared-show.mjs = scripts\verify-prepared-show.mjs
+		scripts\verify-show-persistence.mjs = scripts\verify-show-persistence.mjs
+		scripts\verify-show-server.mjs = scripts\verify-show-server.mjs
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{3E49034A-8C88-5A99-BAB9-B2AA54936204}"
+	ProjectSection(SolutionItems) = preProject
+		docs\design.md = docs\design.md
+		docs\show-prepared-bank.md = docs\show-prepared-bank.md
+		docs\show-soundtrack.md = docs\show-soundtrack.md
+		docs\show.md = docs\show.md
+		docs\studio-design.md = docs\studio-design.md
+		docs\visual-studio.md = docs\visual-studio.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{8923D4D3-912E-5128-9850-0371A8AAC13B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GamifiedLearningSystem.Tests", "Tests\GamifiedLearningSystem.Tests\GamifiedLearningSystem.Tests.csproj", "{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Default|Any CPU = Default|Any CPU
+		Default|x64 = Default|x64
+		Default|x86 = Default|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Debug|x64.Build.0 = Debug|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Debug|x86.Build.0 = Debug|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Default|Any CPU.ActiveCfg = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Default|x64.ActiveCfg = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Default|x86.ActiveCfg = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Release|x64.ActiveCfg = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Release|x64.Build.0 = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Release|x86.ActiveCfg = Release|Any CPU
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F}.Release|x86.Build.0 = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Debug|x64.Build.0 = Debug|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Debug|x86.Build.0 = Debug|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Default|Any CPU.ActiveCfg = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Default|x64.ActiveCfg = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Default|x86.ActiveCfg = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Release|x64.ActiveCfg = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Release|x64.Build.0 = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Release|x86.ActiveCfg = Release|Any CPU
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59}.Release|x86.Build.0 = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Debug|x64.Build.0 = Debug|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Debug|x86.Build.0 = Debug|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Default|Any CPU.ActiveCfg = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Default|x64.ActiveCfg = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Default|x86.ActiveCfg = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Release|x64.ActiveCfg = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Release|x64.Build.0 = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Release|x86.ActiveCfg = Release|Any CPU
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537}.Release|x86.Build.0 = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Debug|x64.Build.0 = Debug|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Debug|x86.Build.0 = Debug|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Default|Any CPU.ActiveCfg = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Default|x64.ActiveCfg = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Default|x86.ActiveCfg = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Release|x64.ActiveCfg = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Release|x64.Build.0 = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Release|x86.ActiveCfg = Release|Any CPU
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F}.Release|x86.Build.0 = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Debug|x64.Build.0 = Debug|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Debug|x86.Build.0 = Debug|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Default|Any CPU.ActiveCfg = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Default|x64.ActiveCfg = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Default|x86.ActiveCfg = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Release|x64.ActiveCfg = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Release|x64.Build.0 = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Release|x86.ActiveCfg = Release|Any CPU
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FD52C6CE-95DF-41F9-B07C-80C009FAC01F} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{6F0759E1-6045-4FF2-A19F-3762D5819B59} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{8CDF0EA9-A4F8-4C4A-BAB6-9CA13A635537} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{40457B22-81A6-4C6C-B54A-D66716F9AC1F} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{62999DDF-E3EA-5675-9810-1AD51FBB5FEE} = {8923D4D3-912E-5128-9850-0371A8AAC13B}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D4A5EEC3-3073-4A54-964D-EAB17090A678}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,2 @@
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'tests',testMatch:['features.spec.js','multiplayer.spec.js','studio-online.spec.js','show-interaction.spec.js','quiz-library.spec.js','auth.spec.js','navigation-language.spec.js'],fullyParallel:false,workers:1,timeout:45000,use:{baseURL:'http://localhost:8180',browserName:'chromium',channel:process.env.CI?undefined:'msedge',screenshot:'only-on-failure'},reporter:'list',webServer:{command:'node ../scripts/test-stack.mjs',url:'http://localhost:8180',reuseExistingServer:false,timeout:45000}});
