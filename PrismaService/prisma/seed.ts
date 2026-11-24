@@ -105,15 +105,43 @@ const banks:Record<string,{topics:string[],questions:Question[][]}>={
  ['Which block handles an awaited rejection?',['catch','finally only','switch','for'],'catch','try/catch handles exceptions including awaited promise rejections.','finally runs regardless of success.']
  ]]}
 };
+const courseLessons:Record<string,string[]>={
+ csharp:[
+  'A variable stores a value under a name. C# uses types such as int for whole numbers, double for decimal values, bool for true/false, and string for text. Declare a variable before using it. var asks the compiler to infer a static type from the initializer.',
+  'A condition chooses which statements run. if runs a block when a Boolean condition is true; else handles the other path. Use == to compare values and = to assign them. Combine conditions with && (both true) or || (at least one true).',
+  'A loop repeats work. for is useful when you know how a counter starts, changes, and stops. while repeats while a condition remains true. foreach visits each item in a collection. Make sure the loop condition will eventually become false.',
+  'An array stores a fixed number of values of one type. C# indexes start at zero, so the first item is at index 0 and the last is at Length - 1. Read or update an item with square brackets, for example scores[0].',
+  'A class describes the data and behavior of a kind of object. An object is an instance of that class. Encapsulation keeps internal state behind methods or properties. Access modifiers control who can use members; inheritance and interfaces let types share or promise behavior.'
+ ],
+ sql:[
+  'A relational database stores records in tables. SELECT chooses columns, FROM names the source table, and ORDER BY sorts the result. Use DISTINCT after SELECT when duplicate result rows should appear only once.',
+  'WHERE filters individual rows before groups are formed. Use comparisons and AND/OR to narrow results. Check missing values with IS NULL because NULL is not compared like an ordinary value. LIKE matches text patterns such as name starting with A%.',
+  'Aggregate functions summarize rows: COUNT counts, SUM adds, and AVG calculates a mean. GROUP BY creates one result per group; HAVING filters those groups after aggregation. WHERE is for rows, while HAVING is for grouped results.',
+  'A JOIN combines rows from related tables. INNER JOIN keeps matching pairs; LEFT JOIN keeps every row from the left table. ON states how records match, often using a primary key and a foreign key. Table aliases make repeated column names clear.',
+  'A transaction groups related changes into one unit. COMMIT saves them; ROLLBACK cancels uncommitted changes. Use parameterized queries to keep user input separate from SQL syntax, and add constraints such as PRIMARY KEY and NOT NULL to protect data.'
+ ],
+ web:[
+  'HTML describes page structure and meaning. Use headings in order, paragraphs for text, buttons for actions, and links for navigation. Add useful alt text to meaningful images so people using assistive technology can understand them.',
+  'CSS controls presentation. Select a class with a dot, such as .card. Use Grid for rows and columns, and Flexbox for a line of items. Padding is space inside a border; margin is space outside it. Add a prefers-reduced-motion rule for users who ask for less movement.',
+  'JavaScript adds behavior. Use const for bindings you will not reassign and let when a binding must change. Arrays store ordered values; map creates a transformed array. Strict equality (===) compares values without implicit type conversion.',
+  'The DOM is the browser’s object representation of a page. querySelector finds the first matching element. addEventListener attaches a handler for events such as click or submit. Use textContent for plain text; it does not interpret a string as HTML.',
+  'Asynchronous work may finish later. fetch returns a Promise, and await pauses an async function until that Promise settles. Check response.ok because an HTTP 404 still resolves fetch. Use try/catch for failures and show the user what to do next.'
+ ]
+};
 async function seed(){
  for(const [i,name] of ['Student','Amina','Daniyar','Alex','Sara'].entries()){
   const email=i===0?'student@example.com':name.toLowerCase()+'@example.com';
-  await prisma.user.upsert({where:{email},update:{},create:{id:`user-${i}`,email,passwordHash:passwordHash('Student123!'),student:{create:{id:`student-${i}`,firstName:name,lastName:i===0?'Learner':'Academy',bio:'Learning one challenge at a time.'}}}});
+  const demoPasswordHash=passwordHash('Student123!');
+  await prisma.user.upsert({where:{email},update:i===0?{passwordHash:demoPasswordHash}:{},create:{id:`user-${i}`,email,passwordHash:demoPasswordHash,student:{create:{id:`student-${i}`,firstName:name,lastName:i===0?'Learner':'Academy',bio:'Learning one challenge at a time.'}}}});
  }
  await prisma.user.upsert({where:{email:'admin@example.com'},update:{},create:{id:'admin',email:'admin@example.com',passwordHash:passwordHash('Admin123!'),role:'ADMIN'}});
+ const teacherPasswordHash=passwordHash('Teacher123!');
+ const teacherUser=await prisma.user.upsert({where:{email:'teacher@example.com'},update:{passwordHash:teacherPasswordHash,role:'TEACHER'},create:{id:'teacher-demo',email:'teacher@example.com',passwordHash:teacherPasswordHash,role:'TEACHER'}});
+ await prisma.teacher.upsert({where:{userId:teacherUser.id},update:{firstName:'Demo',lastName:'Teacher'},create:{id:'teacher-demo-profile',userId:teacherUser.id,firstName:'Demo',lastName:'Teacher'}});
  for(const [key,bank] of Object.entries(banks)){
   const title=key==='csharp'?'C# Foundations':key==='sql'?'SQL & Databases':'Web Development';
   await prisma.course.upsert({where:{id:key},update:{},create:{id:key,title,description:key==='csharp'?'Build a strong foundation in C#, from your first variable to object-oriented thinking.':key==='sql'?'Turn data into answers. Learn queries, joins, and reliable transactions.':'Create accessible web experiences with HTML, CSS, and modern JavaScript.',category:key==='sql'?'Data':'Development',estimatedMinutes:120,isPublished:true}});
+  for(let i=0;i<bank.topics.length;i++){const materialId=`${key}-lesson-${i+1}`;await prisma.courseMaterial.upsert({where:{id:materialId},update:{title:bank.topics[i],content:courseLessons[key][i]},create:{id:materialId,courseId:key,title:bank.topics[i],content:courseLessons[key][i],order:i+1}});}
   for(let l=0;l<5;l++){
    const levelId=`${key}-level-${l+1}`,topicId=`${key}-topic-${l+1}`;
    await prisma.level.upsert({where:{id:levelId},update:{},create:{id:levelId,courseId:key,title:['Beginner','Explorer','Intermediate','Advanced','Expert'][l],description:bank.topics[l],order:l+1,requiredXP:[0,500,1200,2500,5000][l]}});
@@ -133,6 +161,6 @@ async function seed(){
  for(let i=0;i<5;i++)await prisma.leaderboardEntry.upsert({where:{leaderboardId_studentId:{leaderboardId:board.id,studentId:`student-${i}`}},update:{},create:{leaderboardId:board.id,studentId:`student-${i}`,xp:0}});
  await seedShowBank(prisma);
  await seedPreparedSubjects(prisma);
- console.log('Seed complete: 1 admin, 5 students, 9 courses, 21 levels, 161 questions (86 prepared show tasks), 10 achievements.');
+ console.log('Seed complete: 1 admin, 1 teacher demo, 5 students, 9 courses, 21 levels, 161 questions (86 prepared show tasks), 10 achievements.');
 }
 seed().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>prisma.$disconnect());

@@ -12,6 +12,9 @@ public sealed class LearningController(LearningService service,IAIService ai,ICo
  [HttpGet("configuration")] public object Configuration()=>new{levelThresholds=config.GetSection("Game:LevelThresholds").Get<int[]>()??new[]{0,500,1200,2500,5000,9000,15000,25000},timezone="Asia/Qyzylorda"};
  [HttpGet("courses")] public Task<JsonNode> Courses(CancellationToken ct)=>service.ReadAsync("courses",StudentId,ct);
  [HttpGet("courses/{id}")] public Task<JsonNode> Course(string id,CancellationToken ct)=>service.ReadAsync("courses/"+Uri.EscapeDataString(id),StudentId,ct);
+ [HttpPost("courses/{id}/purchase")] public Task<JsonNode> PurchaseCourse(string id,CancellationToken ct)=>service.WriteAsync("courses/"+Uri.EscapeDataString(id)+"/purchase",new{studentId=StudentId},ct);
+ [HttpPost("courses/{id}/reviews")] public Task<JsonNode> CourseReview(string id,CourseReviewRequest request,CancellationToken ct)=>service.WriteAsync("courses/"+Uri.EscapeDataString(id)+"/reviews",new{studentId=StudentId,request.Rating,request.Comment},ct);
+ [HttpPost("courses/{courseId}/materials/{materialId}/complete")] public Task<JsonNode> CompleteMaterial(string courseId,string materialId,CancellationToken ct)=>service.WriteAsync("courses/"+Uri.EscapeDataString(courseId)+"/materials/"+Uri.EscapeDataString(materialId)+"/complete",new{studentId=StudentId},ct);
  [HttpGet("levels/{id}")] public Task<JsonNode> Level(string id,CancellationToken ct)=>service.ReadAsync("levels/"+Uri.EscapeDataString(id),StudentId,ct);
  [HttpGet("tasks/{id}")] public Task<JsonNode> TaskDetail(string id,CancellationToken ct)=>service.ReadAsync("tasks/"+Uri.EscapeDataString(id),StudentId,ct);
  [HttpPost("tasks/{id}/start")] public Task<JsonNode> Start(string id,CancellationToken ct)=>service.WriteAsync("tasks/"+Uri.EscapeDataString(id)+"/start",new{studentId=StudentId},ct);
@@ -34,6 +37,9 @@ public sealed class LearningController(LearningService service,IAIService ai,ICo
  [HttpPost("notifications/read")] public Task<JsonNode> ReadNotifications(CancellationToken ct)=>service.WriteAsync("notifications/read",new{studentId=StudentId},ct);
  [HttpGet("ai/next-task")] public Task<JsonNode> NextTask(CancellationToken ct)=>ai.GetNextTaskAsync(StudentId,ct);
  [HttpPost("ai/hint")] public Task<JsonNode> Hint(HintRequest r,CancellationToken ct)=>ai.GenerateHintAsync(StudentId,r.TaskId,ct);
+ [HttpPost("ai/tutor")] public Task<JsonNode> Tutor(TutorRequest r,CancellationToken ct)=>ai.TutorAsync(r.Message,r.Language,ct);
  [HttpPost("ai/analyze")] public Task<JsonNode> Analyze(CancellationToken ct)=>ai.AnalyzeStudentProgressAsync(StudentId,ct);
 }
 public record ReportRequest(string Message);
+public record CourseReviewRequest(int Rating,string Comment);
+public record TutorRequest(string Message,string Language="en");

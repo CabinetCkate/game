@@ -33,7 +33,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
  o.TokenValidationParameters=new(){ValidateIssuer=true,ValidateAudience=true,ValidateLifetime=true,ValidateIssuerSigningKey=true,ValidIssuer=config["Jwt:Issuer"],ValidAudience=config["Jwt:Audience"],IssuerSigningKey=new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Secret"]!)),ClockSkew=TimeSpan.FromSeconds(30)};
  o.Events=new JwtBearerEvents{OnMessageReceived=context=>{if(context.Request.Path.StartsWithSegments("/api/hubs/game")&&context.Request.Query.TryGetValue("access_token",out var token))context.Token=token;return Task.CompletedTask;}};
 });
-builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=131072;o.MaximumParallelInvocationsPerClient=1;});
+builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=524288;o.MaximumParallelInvocationsPerClient=1;});
 builder.Services.AddSingleton<MultiplayerService>();
 builder.Services.AddSingleton<GamifiedLearningSystem.API.QuizLibrary.QuizLibraryStore>();
 builder.Services.AddHostedService(sp=>sp.GetRequiredService<MultiplayerService>());

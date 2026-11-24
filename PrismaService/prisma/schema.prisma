@@ -13,6 +13,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   student Student?
+  teacher Teacher?
   refreshTokens RefreshToken[]
   resetTokens PasswordResetToken[]
   @@map("Users")
@@ -26,6 +27,7 @@ model Student {
   avatarUrl String @default("")
   bio String @default("") @db.NVarChar(Max)
   totalXP Int @default(0)
+  coins Int @default(300)
   level Int @default(1)
   currentStreak Int @default(0)
   longestStreak Int @default(0)
@@ -47,23 +49,85 @@ model Student {
   sessions TaskSession[]
   reports TaskReport[]
   shows ShowSession[]
+  materialProgress StudentMaterialProgress[]
+  courseEnrollments CourseEnrollment[]
+  courseReviews CourseReview[]
   @@index([totalXP])
   @@map("Students")
+}
+model Teacher {
+  id String @id @default(uuid()) @db.VarChar(36)
+  userId String @unique @db.VarChar(36)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  firstName String @db.VarChar(80)
+  lastName String @db.VarChar(80)
+  createdAt DateTime @default(now())
+  @@map("Teachers")
 }
 model Course {
   id String @id @default(uuid()) @db.VarChar(36)
   title String
   description String @db.NVarChar(Max)
   category String
-  imageUrl String @default("")
+  imageUrl String @default("") @db.NVarChar(Max)
   difficulty String @default("EASY") @db.VarChar(20)
   estimatedMinutes Int
+  price Int @default(100)
   isPublished Boolean @default(false)
+  createdByUserId String? @db.VarChar(36)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   levels Level[]
   topics Topic[]
+  materials CourseMaterial[]
+  enrollments CourseEnrollment[]
+  reviews CourseReview[]
   @@map("Courses")
+}
+model CourseEnrollment {
+  studentId String @db.VarChar(36)
+  courseId String @db.VarChar(36)
+  purchasedAt DateTime @default(now())
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  course Course @relation(fields:[courseId], references:[id], onDelete:Cascade)
+  @@id([studentId,courseId])
+  @@map("CourseEnrollments")
+}
+model CourseReview {
+  id String @id @default(uuid()) @db.VarChar(36)
+  studentId String @db.VarChar(36)
+  courseId String @db.VarChar(36)
+  rating Int
+  comment String @db.NVarChar(2000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  course Course @relation(fields:[courseId], references:[id], onDelete:Cascade)
+  @@unique([studentId,courseId])
+  @@index([courseId,createdAt])
+  @@map("CourseReviews")
+}
+model CourseMaterial {
+  id String @id @default(uuid()) @db.VarChar(36)
+  courseId String @db.VarChar(36)
+  course Course @relation(fields:[courseId], references:[id], onDelete:Cascade)
+  title String @db.NVarChar(255)
+  content String @default("") @db.NVarChar(Max)
+  videoUrl String @default("") @db.NVarChar(1000)
+  order Int
+  createdAt DateTime @default(now())
+  progress StudentMaterialProgress[]
+  @@unique([courseId,order])
+  @@map("CourseMaterials")
+}
+model StudentMaterialProgress {
+  studentId String @db.VarChar(36)
+  materialId String @db.VarChar(36)
+  student Student @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  material CourseMaterial @relation(fields:[materialId], references:[id], onDelete:Cascade)
+  completedAt DateTime @default(now())
+  @@id([studentId,materialId])
+  @@map("StudentMaterialProgress")
 }
 model Level {
   id String @id @default(uuid()) @db.VarChar(36)

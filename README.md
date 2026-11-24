@@ -5,10 +5,10 @@
 The application now uses Microsoft SQL Server. Create its schema in SSMS first:
 
 1. Connect to `WIN-TSO2EOO2KPR\SQLEXPRESS` using Windows Authentication.
-2. Open and execute `database/sqlserver/01_CreateGamifiedLearningSystem.sql`, then the additive `database/sqlserver/03_ShowSessions.sql` update.
+2. Open and execute `database/sqlserver/01_CreateGamifiedLearningSystem.sql`, then the additive `database/sqlserver/03_ShowSessions.sql`, `database/sqlserver/04_CourseLessonsAndTeachers.sql`, and `database/sqlserver/05_CourseMarketAndCurrency.sql` updates in order.
 3. If the app runs from Docker, enable SQL Server authentication and TCP/IP, set a fixed TCP port, then execute `02_CreateApplicationLogin.sql` after replacing its password placeholder.
 4. Put the same login, password, host, and port into `DATABASE_URL` in `.env`. Docker Desktop normally uses `host.docker.internal`; a locally run data service normally uses `localhost`.
-5. Run `npm run seed` in `PrismaService` to load demo courses and accounts, then run `docker compose up --build`.
+5. Run `npm run seed` in `PrismaService` to load demo courses and accounts, then run `docker compose up --build`. The seed includes the teacher demo account `teacher@example.com` / `Teacher123!`; the sign-in page has a **Fill teacher login** button.
 
 `DATABASE_URL` example:
 
@@ -29,6 +29,10 @@ The interface supports Қазақша, Русский and English. Choose the la
 Sign-in, registration and password reset have separate show/hide buttons for each password field. New passwords require **8–128 characters**, uppercase and lowercase Latin letters, a number and a symbol. A correct submitted choice turns green. An incorrect submitted choice turns red, and the correct choice and explanation are not revealed.
 
 Admin accounts have a dedicated sidebar for students, courses, levels, topics, tasks, achievements, seasons, daily goals, reports and AI settings. Each link opens and highlights its own administration section; device preferences remain available under Settings.
+
+## Teacher Studio and lesson flow
+
+Select **Teacher** during registration to open the Teacher Studio. Teachers can create courses with cover images, written lessons, YouTube links, and multiple-choice tests. Students must read or watch every lesson and mark it complete before a course test unlocks. The AI tutor appears in the student workspace; configure `AI_API_KEY`, `AI_MODEL`, and `AI_BASE_URL` in `.env` to enable generated tutor responses.
 
 ## Online 3D studio
 

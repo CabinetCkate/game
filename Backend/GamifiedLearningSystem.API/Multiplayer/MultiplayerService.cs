@@ -16,10 +16,6 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
     private static readonly JsonSerializerOptions json = new(JsonSerializerDefaults.Web);
     private static string Normalize(string code) => (code ?? "").Trim().ToUpperInvariant();
     private MultiplayerRoom Find(string code) => rooms.GetValueOrDefault(Normalize(code)) ?? throw new GameRuleException("roomNotFound");
-    private void CheckMembership(string id, string? code = null)
-    {
-        if (rooms.Values.Any(r => r.Code != code && r.Players.ContainsKey(id))) throw new GameRuleException("alreadyInRoom");
-    }
     private async Task<(string Name, string Photo)> Profile(string id)
     {
         using var scope = scopes.CreateScope();
@@ -33,7 +29,10 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
         if (language is not null) QuizLocalization.RequireLanguage(language);
         if (count is < 1 or > 20 || seconds is < 10 or > 120 || string.IsNullOrWhiteSpace(courseId) || courseId.Length > 100) throw new GameRuleException("invalidRoomSettings");
         using var scope = scopes.CreateScope();
-        var data = await scope.ServiceProvider.GetRequiredService<IDataRepository>().SendAsync(HttpMethod.Get, "multiplayer/questions?courseId=" + Uri.EscapeDataString(courseId), null, CancellationToken.None);
+        var repository = scope.ServiceProvider.GetRequiredService<IDataRepository>();
+        var access = await repository.SendAsync(HttpMethod.Get, "courses/" + Uri.EscapeDataString(courseId) + "?studentId=" + Uri.EscapeDataString(id), null, CancellationToken.None);
+        if (access["enrolled"]?.GetValue<bool>() != true) throw new GameRuleException("courseNotPurchased");
+        var data = await repository.SendAsync(HttpMethod.Get, "multiplayer/questions?courseId=" + Uri.EscapeDataString(courseId), null, CancellationToken.None);
         var questions = data["questions"]?.Deserialize<List<QuizQuestion>>(json) ?? [];
         questions = questions.Where(q => q.Options.Count >= 2 && q.Options.Any(o => string.Equals(o.Text.Trim(), q.CorrectAnswer.Trim(), StringComparison.OrdinalIgnoreCase)))
             .OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).Take(count).ToList();
@@ -59,9 +58,9 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
             }
         }
         language ??= originalLanguage;
-        if (language != originalLanguage && !prepared.ContainsKey(language)) prepared[language] = await Translate(data["courseTitle"]?.ToString() ?? courseId, originalViews, language, CancellationToken.None);
+        if (language != originalLanguage && !prepared.ContainsKey(language)) prepared[language] = await TranslateOrOriginal(data["courseTitle"]?.ToString() ?? courseId, originalViews, language, CancellationToken.None);
         var profile = await Profile(id);
-        return Store(id, connection, profile.Name, data["courseTitle"]?.ToString() ?? courseId, questions, seconds, avatarId, presentationSeconds, originalLanguage, language, prepared, localized, profile.Photo);
+        return await Store(id, connection, profile.Name, data["courseTitle"]?.ToString() ?? courseId, questions, seconds, avatarId, presentationSeconds, originalLanguage, language, prepared, localized, profile.Photo);
     }
     public async Task<QuizRoomView> CreateText(string id, string connection, string title, string sourceText, int count, int seconds, string avatarId, CancellationToken ct, string? language = null)
     {
@@ -71,7 +70,6 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
         if (title.Length is < 1 or > 100 || sourceText.Length is < 80 or > 20000 || count is < 1 or > 20 || seconds is < 10 or > 120) throw new GameRuleException("invalidSourceSettings");
         lock (gate)
         {
-            CheckMembership(id);
             if (rooms.Count >= 500) throw new GameRuleException("serverBusy");
             if (generating.TryGetValue(id, out var previous) && DateTimeOffset.UtcNow - previous < TimeSpan.FromSeconds(30)) throw new GameRuleException("generationBusy");
             generating[id] = DateTimeOffset.UtcNow;
@@ -89,33 +87,45 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
             var originalLanguage = QuizLocalization.DetectLanguage(originalViews);
             language ??= originalLanguage;
             var prepared = new Dictionary<string, QuizTranslation>();
-            if (language != originalLanguage) prepared[language] = await Translate(title, originalViews, language, timeout.Token);
+            if (language != originalLanguage) prepared[language] = await TranslateOrOriginal(title, originalViews, language, timeout.Token);
             var profile = await Profile(id);
             ct.ThrowIfCancellationRequested();
             await scope.ServiceProvider.GetRequiredService<GamifiedLearningSystem.API.QuizLibrary.QuizLibraryStore>().Save(id, title, sourceText, "text", language, questions, ct);
-            return Store(id, connection, profile.Name, title, questions, seconds, avatarId, 5, originalLanguage, language, prepared, localized, profile.Photo);
+            return await Store(id, connection, profile.Name, title, questions, seconds, avatarId, 5, originalLanguage, language, prepared, localized, profile.Photo);
         }
         catch (GamifiedLearningSystem.Application.Services.DataException ex) when (ex.Message == "aiUnavailable") { throw new GameRuleException("aiUnavailable"); }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or OperationCanceledException or InvalidOperationException)
         { logger.LogWarning("Source quiz generation unavailable: {Type}", ex.GetType().Name); throw new GameRuleException("generationFailed"); }
     }
-    private QuizRoomView Store(string id, string connection, string name, string title, List<QuizQuestion> questions, int seconds, string? avatarId, int presentationSeconds,
+    private async Task<QuizRoomView> Store(string id, string connection, string name, string title, List<QuizQuestion> questions, int seconds, string? avatarId, int presentationSeconds,
         string originalLanguage, string language, Dictionary<string, QuizTranslation> prepared, bool localized, string photo = "", bool bots = false)
     {
+        List<string> leftRooms;
+        QuizRoomView view;
         lock (gate)
         {
-            CheckMembership(id);
             if (rooms.Count >= 500) throw new GameRuleException("serverBusy");
+            var previousRooms = rooms.Values.Where(r => r.ContainsMember(id)).ToList();
+            leftRooms = [];
+            foreach (var previous in previousRooms)
+            {
+                previous.Leave(id, DateTimeOffset.UtcNow);
+                if ((previous.IsSolo && previous.HostId == id) || previous.Players.Count == 0) rooms.Remove(previous.Code);
+                else leftRooms.Add(previous.Code);
+            }
             string code;
             do { code = string.Concat(Enumerable.Range(0, 6).Select(_ => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[RandomNumberGenerator.GetInt32(32)])); } while (rooms.ContainsKey(code));
-            var room = new MultiplayerRoom(code, id, title, questions, seconds, DateTimeOffset.UtcNow, presentationSeconds, originalLanguage, localized);
+            var inviteToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+            var room = new MultiplayerRoom(code, id, title, questions, seconds, DateTimeOffset.UtcNow, presentationSeconds, originalLanguage, localized, inviteToken);
             foreach (var (locale, display) in prepared) room.AddTranslation(locale, display);
             room.Join(id, name, connection, DateTimeOffset.UtcNow, avatarId); rooms.Add(code, room);
-            room.Players[id].AvatarUrl = photo;
+            room.SetAvatarUrl(id, photo);
             if (bots) room.AddBots(DateTimeOffset.UtcNow);
             room.SetLanguage(id, language, DateTimeOffset.UtcNow);
-            return room.View(id, DateTimeOffset.UtcNow);
+            view = room.View(id, DateTimeOffset.UtcNow);
         }
+        foreach (var previousCode in leftRooms) await Broadcast(previousCode);
+        return view;
     }
     public async Task<QuizRoomView> CreateSaved(string id, string connection, string quizId, int seconds, string avatarId, bool bots, string language, CancellationToken ct)
     {
@@ -130,24 +140,52 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
         var views = questions.Select(q => new QuizQuestionView(q.Id, q.Title, q.Question, q.Options)).ToList();
         var originalLanguage = QuizLocalization.DetectLanguage(views);
         var prepared = new Dictionary<string, QuizTranslation>();
-        if (language != originalLanguage) prepared[language] = await Translate(quiz.Title, views, language, ct);
-        var view = Store(id, connection, profile.Name, quiz.Title, questions, seconds, avatarId, 5, originalLanguage, language,
+        if (language != originalLanguage) prepared[language] = await TranslateOrOriginal(quiz.Title, views, language, ct);
+        var view = await Store(id, connection, profile.Name, quiz.Title, questions, seconds, avatarId, 5, originalLanguage, language,
             prepared, false, profile.Photo, bots);
         if (!bots) return view;
         await Start(id, view.Code);
         lock (gate) return Find(view.Code).View(id, DateTimeOffset.UtcNow);
     }
-    public async Task<QuizRoomView> Join(string id, string connection, string code, string? avatarId = null, string? language = null)
+    public async Task<QuizRoomView> Join(string id, string connection, string code, string? avatarId = null, string? language = null, string? inviteToken = null)
     {
         MultiplayerRoom room;
         lock (gate)
         {
-            room = Find(code); CheckMembership(id, room.Code);
-            if (room.Status != "lobby" && !room.Players.ContainsKey(id)) throw new GameRuleException("gameStarted");
+            room = Find(code);
+            if (!room.ContainsMember(id) && (room.Status != "lobby" || room.Players.Count >= 4))
+            {
+                if (room.IsSolo) throw new GameRuleException("spectatorsOnlineOnly");
+                if (!room.HasValidInvite(inviteToken)) throw new GameRuleException("inviteOnly");
+            }
         }
         if (language is not null) { QuizLocalization.RequireLanguage(language); await EnsureLanguage(room, language); }
         var profile = await Profile(id);
-        lock (gate) { room = Find(code); CheckMembership(id, room.Code); room.Join(id, profile.Name, connection, DateTimeOffset.UtcNow, avatarId); room.Players[id].AvatarUrl = profile.Photo; if (language is not null) room.SetLanguage(id, language, DateTimeOffset.UtcNow); return room.View(id, DateTimeOffset.UtcNow); }
+        List<string> leftRooms;
+        QuizRoomView view;
+        lock (gate)
+        {
+            room = Find(code);
+            if (!room.ContainsMember(id) && (room.Status != "lobby" || room.Players.Count >= 4))
+            {
+                if (room.IsSolo) throw new GameRuleException("spectatorsOnlineOnly");
+                if (!room.HasValidInvite(inviteToken)) throw new GameRuleException("inviteOnly");
+            }
+            var previousRooms = rooms.Values.Where(r => r.Code != room.Code && r.ContainsMember(id)).ToList();
+            leftRooms = [];
+            foreach (var previous in previousRooms)
+            {
+                previous.Leave(id, DateTimeOffset.UtcNow);
+                if ((previous.IsSolo && previous.HostId == id) || previous.Players.Count == 0) rooms.Remove(previous.Code);
+                else leftRooms.Add(previous.Code);
+            }
+            room.Join(id, profile.Name, connection, DateTimeOffset.UtcNow, avatarId);
+            room.SetAvatarUrl(id, profile.Photo);
+            if (language is not null) room.SetLanguage(id, language, DateTimeOffset.UtcNow);
+            view = room.View(id, DateTimeOffset.UtcNow);
+        }
+        foreach (var previousCode in leftRooms) await Broadcast(previousCode);
+        return view;
     }
     private async Task<QuizTranslation> Translate(string title, List<QuizQuestionView> questions, string language, CancellationToken ct)
     {
@@ -157,6 +195,20 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
         try { return await scope.ServiceProvider.GetRequiredService<IAIService>().TranslateQuizAsync(title, questions, language, timeout.Token); }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or OperationCanceledException or InvalidOperationException)
         { logger.LogWarning("Quiz translation unavailable: {Type}", ex.GetType().Name); throw new GameRuleException("translationFailed"); }
+    }
+    private async Task<QuizTranslation> TranslateOrOriginal(string title, List<QuizQuestionView> questions, string language, CancellationToken ct)
+    {
+        try { return await Translate(title, questions, language, ct); }
+        catch (GameRuleException ex) when (ex.Message == "translationFailed")
+        {
+            logger.LogWarning("Quiz translation to {Language} is unavailable; keeping the original text", language);
+            return new(title, questions.Select(q => q with { Options = q.Options.ToList() }).ToList());
+        }
+        catch (GamifiedLearningSystem.Application.Services.DataException ex) when (ex.Message == "aiUnavailable")
+        {
+            logger.LogWarning("Quiz translation to {Language} is unavailable; keeping the original text", language);
+            return new(title, questions.Select(q => q with { Options = q.Options.ToList() }).ToList());
+        }
     }
     private async Task EnsureLanguage(MultiplayerRoom room, string language)
     {
@@ -168,7 +220,7 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
             if (!translating.TryGetValue(key, out pending!))
             {
                 var title = room.OriginalTitle; var questions = room.OriginalQuestions;
-                pending = Task.Run(() => Translate(title, questions, language, CancellationToken.None));
+                pending = Task.Run(() => TranslateOrOriginal(title, questions, language, CancellationToken.None));
                 translating[key] = pending;
             }
         }
@@ -183,7 +235,7 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
     {
         QuizLocalization.RequireLanguage(language);
         MultiplayerRoom room;
-        lock (gate) { room = Find(code); if (!room.Players.ContainsKey(id)) throw new GameRuleException("notInRoom"); }
+        lock (gate) { room = Find(code); if (!room.ContainsMember(id)) throw new GameRuleException("notInRoom"); }
         await EnsureLanguage(room, language);
         lock (gate) { room = Find(code); room.SetLanguage(id, language, DateTimeOffset.UtcNow); return room.View(id, DateTimeOffset.UtcNow); }
     }
@@ -205,11 +257,11 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
     public void Next(string id, string code) { lock (gate) Find(code).NextRound(id, DateTimeOffset.UtcNow); }
     public void Submit(string id, string code, string questionId, string optionId) { lock (gate) Find(code).Submit(id, questionId, optionId, DateTimeOffset.UtcNow); }
     public void ConfirmSoloAnswer(string id, string code, string questionId, string optionId) { lock (gate) Find(code).ConfirmSoloAnswer(id, questionId, optionId, DateTimeOffset.UtcNow); }
-    public void Leave(string id, string code) { lock (gate) { var room = Find(code); room.Leave(id, DateTimeOffset.UtcNow); if (room.IsSolo || room.Players.Count == 0) rooms.Remove(room.Code); } }
+    public void Leave(string id, string code) { lock (gate) { var room = Find(code); room.Leave(id, DateTimeOffset.UtcNow); if ((room.IsSolo && room.HostId == id) || room.Players.Count == 0) rooms.Remove(room.Code); } }
     public async Task Disconnect(string connection)
     {
         List<string> affected;
-        lock (gate) { affected = rooms.Values.Where(r => r.Players.Values.Any(p => p.Connections.Contains(connection))).Select(r => r.Code).ToList(); foreach (var code in affected) rooms[code].Disconnect(connection, DateTimeOffset.UtcNow); }
+        lock (gate) { affected = rooms.Values.Where(r => r.Players.Values.Concat(r.Audience.Values).Any(p => p.Connections.Contains(connection))).Select(r => r.Code).ToList(); foreach (var code in affected) rooms[code].Disconnect(connection, DateTimeOffset.UtcNow); }
         foreach (var code in affected) await Broadcast(code);
     }
     public async Task Broadcast(string code)
@@ -218,7 +270,7 @@ public sealed class MultiplayerService(IServiceScopeFactory scopes, IHubContext<
         lock (gate)
         {
             if (!rooms.TryGetValue(Normalize(code), out var room)) return;
-            messages = room.Players.Values.Select(p => (p.Connections.ToList(), room.View(p.Id, DateTimeOffset.UtcNow))).ToList();
+            messages = room.Players.Values.Concat(room.Audience.Values).Select(p => (p.Connections.ToList(), room.View(p.Id, DateTimeOffset.UtcNow))).ToList();
         }
         foreach (var (connections, view) in messages) if (connections.Count > 0) await hub.Clients.Clients(connections).SendAsync("RoomUpdated", view);
     }

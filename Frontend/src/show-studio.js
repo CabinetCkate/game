@@ -8,7 +8,7 @@ const COLORS = [0xa68aff, 0x4edbcc, 0xf7b968, 0xee83b3];
 const IDS = ['nova', 'leo', 'maya', 'atlas'];
 const DEFAULTS = IDS.map((avatarId, i) => ({ id: avatarId, avatarId, name: ['Нова', 'Лео', 'Майя', 'Атлас'][i], score: 0, isBot: true }));
 const assetUrl = path => `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
-const poseDurations = { thinking: 3.5, buzzer: .8, correct: 2.3, wrong: 2.6, win: 4, lose: 3.2, greeting: 3, rules: 3.5, point: 2.7, reaction: 2, results: 4 };
+const poseDurations = { thinking: 3.5, buzzer: .8, correct: 2.3, wrong: 2.6, win: 4, lose: 3.2, greeting: 3, rules: 3.5, point: 2.7, reaction: 2, results: 4, talk: 2.5, clap: 2 };
 const screenCopy={
  league:['БІЛІМ ЛИГАСЫ','ЛИГА ЗНАНИЙ','KNOWLEDGE LEAGUE'],
  finished:['ОЙЫН АЯҚТАЛДЫ','ЭФИР ЗАВЕРШЁН','SHOW COMPLETE'],
@@ -142,7 +142,7 @@ class ShowStudio {
     this.questionScreen.update({ phase: 'intro' });
     const brand = this.textPanel(5, .55, (ctx, canvas) => {
       ctx.fillStyle = '#080c20'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.textAlign = 'center'; ctx.fillStyle = '#e8d1ad'; ctx.font = '700 66px Arial';
+      ctx.textAlign = 'center'; ctx.fillStyle = '#e8d1ad'; ctx.font = '700 66px system-ui';
       ctx.fillText('✦  '+copy('league')+'  ✦', canvas.width / 2, 78);
     }, [1024, 128]);
     brand.mesh.position.set(0, 6.38, -3.65);brand.update();this.brandScreen=brand;
@@ -288,7 +288,8 @@ class ShowStudio {
     const gestures = makeGestureClips(model);
     mixer.stopAllAction();
     const actions = new Map([...clips, ...gestures].map(clip => [clip.name.toLowerCase(), mixer.clipAction(clip)]));
-    const actor = { id, root, model, mixer, actions, current: null, position: position.clone(), index, returnAt: Infinity, entryStartedAt: null };
+    this.applyTextureQuality(model);
+    const actor = { id, root, model, mixer, actions, current: null, position: position.clone(), index, returnAt: Infinity, entryStartedAt: null, sticker: null };
     this.playActor(actor, 'idle', true);
     return actor;
   }
@@ -324,8 +325,8 @@ class ShowStudio {
     }
     const aliases = {
       idle: ['idle', 'standingidle', 'idle_loop'], entry: ['walk', 'walking', 'walk_loop'],
-      correct: ['show_correct', 'jump', 'wave'], win: ['show_win', 'jump', 'wave'],
-      wrong: ['show_wrong'], lose: ['show_lose'], thinking: ['show_thinking'], buzzer: ['show_buzzer'],
+      correct: ['show_clap', 'show_correct', 'jump', 'wave'], win: ['show_win', 'jump', 'wave'],
+      wrong: ['show_wrong'], lose: ['show_lose'], thinking: ['show_thinking'], buzzer: ['show_buzzer'], talk: ['show_talk'], clap: ['show_clap'],
       greeting: ['show_greeting', 'wave'], rules: ['show_rules'], point: ['show_point'], reaction: ['show_reaction'], results: ['show_results'],
     };
     let action;
@@ -363,6 +364,24 @@ class ShowStudio {
       if(!['question','feedback'].includes(this.state.phase))this.setCamera('answer', index, 1.35);
     }
     if (type === 'win') this.confettiUntil = this.elapsed + 8;
+    if (type === 'buzzer') this.setStickerMood(actor, 'surprised');
+  }
+
+  setHostSpeaking(active) {
+    if (this.disposed || !this.host) return;
+    this.playActor(this.host, active ? 'talk' : 'idle', true);
+  }
+
+  setStickerMood(actor, mood, duration = 2.4) {
+    if (!actor) return;
+    if (!actor.sticker) {
+      actor.sticker = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+      actor.sticker.position.set(.32, 2.16, 0); actor.sticker.scale.set(.48, .48, 1); actor.sticker.renderOrder = 8; actor.root.add(actor.sticker);
+    }
+    actor.sticker.material.map?.dispose();
+    actor.sticker.material.map = makeStickerTexture(mood);
+    actor.sticker.material.needsUpdate = true; actor.sticker.material.opacity = 0;
+    actor.stickerMood = mood; actor.stickerStarted = this.elapsed; actor.stickerUntil = this.elapsed + duration;
   }
 
   setState(next, force = false) {
@@ -376,7 +395,7 @@ class ShowStudio {
       if (next?.online && next.phase === 'question') this.characters.forEach(actor => {
         const current = next.participants?.find(p => p.id === actor.participantId);
         const old = previous.participants?.find(p => p.id === actor.participantId);
-        if (current?.answered && !old?.answered) this.playActor(actor, 'buzzer');
+        if (current?.answered && !old?.answered) { this.playActor(actor, 'buzzer'); this.setStickerMood(actor, 'surprised'); }
       });
       return;
     }
@@ -387,7 +406,7 @@ class ShowStudio {
     if (!this.characters.length) { this.setCamera('wide'); return; }
     this.cameraDefault = phase === 'intro' ? 'wide' : 'game';
     if (phase === 'intro') {
-      this.setCamera('wide'); this.playActor(this.host, 'greeting');
+      this.setCamera('wide'); this.playActor(this.host, 'greeting'); this.characters.forEach(actor => this.setStickerMood(actor, 'happy'));
       if (next?.id && previous.id !== next.id) this.characters.forEach((_, index) => this.trigger('entry', index));
     } else if (phase === 'rules') {
       this.setCamera('host', 0, 3.4); this.playActor(this.host, 'rules');
@@ -398,21 +417,22 @@ class ShowStudio {
       this.setCamera(remaining > CAMERA_PULLBACK_SECONDS ? 'television' : 'game');
       if (remaining > CAMERA_PULLBACK_SECONDS) { this.camera.position.copy(this.cameraDestination); this.lookAt.copy(this.lookDestination);this.cameraTransition=null; }
       this.playActor(this.host, 'point');
-      this.characters.forEach(actor => this.playActor(actor, 'thinking'));
+      this.characters.forEach(actor => { this.playActor(actor, 'thinking'); this.setStickerMood(actor, 'thinking'); });
     } else if (phase === 'question') {
       // A network snapshot at the answering boundary must not restart the pullback.
       if(this.cameraName!=='game')this.setCamera('game');this.playActor(this.host, 'point');
-      this.characters.forEach(actor => this.playActor(actor, 'thinking'));
+      this.characters.forEach(actor => { this.playActor(actor, 'thinking'); this.setStickerMood(actor, 'thinking', 1.8); });
     } else if (phase === 'feedback') {
       // Keep all stations in view so everyone can see red/green results together.
       this.setCamera('game'); this.playActor(this.host, 'reaction');
       this.characters.forEach((actor, index) => {
         const participant=next.participants?.find(player=>player.id===actor.participantId),outcome=revealedAnswerOutcome(next,participant,index);
         this.playActor(actor, outcome==null?'idle':outcome?'correct':'wrong');
+        this.setStickerMood(actor, outcome==null?'thinking':outcome?'happy':'sad');
       });
     } else if (phase === 'results') {
       this.setCamera('finale'); this.playActor(this.host, 'results');
-      this.characters.forEach(actor=>this.playActor(actor,'idle',true));
+      this.characters.forEach((actor,index)=>{this.playActor(actor,index===0?'win':'correct');this.setStickerMood(actor,index===0?'sparkle':'happy',3.4);});
       this.confettiUntil=0;
     }
   }
@@ -489,7 +509,8 @@ class ShowStudio {
   updateSettings(settings) {
     this.settings = { ...this.settings, ...settings };
     const quality = this.settings.quality;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : quality === 'low' ? 1 : 1.4));
+    const mobile = window.matchMedia('(max-width: 650px)').matches;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? (mobile ? 1.8 : 2.25) : quality === 'low' ? 1 : 1.5));
     this.renderer.shadowMap.enabled = quality !== 'low';
     if (this.settings.reducedMotion) {
       // Apply the preference immediately, including when the viewport and
@@ -500,9 +521,24 @@ class ShowStudio {
       }
     }
     this.beams?.forEach(beam => beam.visible = quality !== 'low');
-    this.keyLight.shadow.mapSize.set(quality === 'high' ? 2048 : 1024, quality === 'high' ? 2048 : 1024);
+    const requestedShadowSize = quality === 'high' ? (mobile ? 2048 : 3072) : quality === 'medium' ? 1024 : 512;
+    const shadowSize = Math.min(requestedShadowSize, this.renderer.capabilities.maxTextureSize);
+    this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
     if (this.keyLight.shadow.map) { this.keyLight.shadow.map.dispose(); this.keyLight.shadow.map = null; }
+    this.applyTextureQuality(this.scene);
     this.resize();
+  }
+
+  applyTextureQuality(root) {
+    const quality = this.settings.quality;
+    const max = this.renderer.capabilities.getMaxAnisotropy();
+    const anisotropy = quality === 'high' ? max : quality === 'medium' ? Math.min(4, max) : 1;
+    root.traverse(object => {
+      const materials = Array.isArray(object.material) ? object.material : object.material ? [object.material] : [];
+      materials.forEach(material => Object.values(material).forEach(value => {
+        if (value?.isTexture && value.anisotropy !== anisotropy) { value.anisotropy = anisotropy; value.needsUpdate = true; }
+      }));
+    });
   }
 
   resize() {
@@ -559,6 +595,16 @@ class ShowStudio {
         if (progress === 1) { actor.entryStartedAt = null; this.playActor(actor, 'idle', true); }
       }
       if (this.elapsed > actor.returnAt) this.playActor(actor, this.state.phase === 'results' ? actor.current?.getClip().name.includes('win') ? 'win' : 'idle' : 'idle', true);
+      if (actor.sticker) {
+        const remaining = (actor.stickerUntil || 0) - this.elapsed, age = this.elapsed - (actor.stickerStarted || 0);
+        actor.sticker.visible = remaining > 0;
+        if (remaining > 0) {
+          const pop = this.settings.reducedMotion ? 1 : Math.min(1, Math.max(0, age / .22));
+          actor.sticker.position.y = 2.16 + (this.settings.reducedMotion ? 0 : (1 - pop) * .38 + Math.sin(this.elapsed * 5 + actor.index) * .045);
+          actor.sticker.scale.setScalar(.48 * (this.settings.reducedMotion ? 1 : .72 + pop * .28));
+          actor.sticker.material.opacity = this.settings.reducedMotion ? 1 : Math.min(1, pop, remaining / .3);
+        }
+      }
     }
     if (this.elapsed > this.cameraReturnAt) this.setCamera(this.cameraDefault);
     this.updateCameraMotion(now/1000);
@@ -587,6 +633,7 @@ class ShowStudio {
 
   removeActor(actor) {
     actor.mixer.stopAllAction(); actor.mixer.uncacheRoot(actor.model);
+    if (actor.sticker) { actor.sticker.material.map?.dispose(); actor.sticker.material.dispose(); actor.sticker.geometry.dispose(); }
     this.scene.remove(actor.root);
     actor.model.traverse(mesh => { if (mesh.isMesh) (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(material => material.dispose()); });
   }
@@ -635,29 +682,55 @@ function drawScreen(ctx, canvas, state = {}) {
   ctx.strokeStyle = '#66519b'; ctx.lineWidth = 2; ctx.strokeRect(24, 24, width - 48, height - 48);
   const q = state.question || state.currentQuestion || {};
   const title = state.phase === 'results' ? copy('finished') : state.phase === 'rules' ? copy('rules') : state.phase === 'intro' ? copy('welcome') : q.topicName || q.topic || q.title || copy('league');
-  ctx.textAlign = 'center'; ctx.fillStyle = '#c7b290'; ctx.font = '600 26px Arial'; ctx.fillText(String(title).toUpperCase(), width / 2, 85);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#c7b290'; ctx.font = '600 26px system-ui'; ctx.fillText(String(title).toUpperCase(), width / 2, 85);
   const prompt = state.phase === 'results' ? copy('outro') : state.phase === 'rules' ? copy('instructions') : q.prompt || q.question || q.text || copy('league');
   let fontSize = prompt.length > 120 ? 44 : prompt.length > 65 ? 50 : 65;
-  ctx.font = `600 ${fontSize}px Arial`;
+  ctx.font = `600 ${fontSize}px system-ui`;
   let lines = wrapText(ctx, prompt, width - 150);
-  while ((lines.length > 4 || lines.length * fontSize * 1.2 > 240) && fontSize > 16) { fontSize -= 2; ctx.font = `600 ${fontSize}px Arial`; lines = wrapText(ctx, prompt, width - 150); }
+  while ((lines.length > 4 || lines.length * fontSize * 1.2 > 240) && fontSize > 16) { fontSize -= 2; ctx.font = `600 ${fontSize}px system-ui`; lines = wrapText(ctx, prompt, width - 150); }
   ctx.fillStyle = '#f2f1ff'; const lineHeight = fontSize * 1.2; const start = 160 + (240 - lines.length * lineHeight) / 2;
   lines.forEach((line, i) => ctx.fillText(line, width / 2, start + i * lineHeight));
-  ctx.fillStyle = '#8794b4'; ctx.font = '22px Arial'; ctx.fillText(state.phase === 'intro' ? copy('subtitle') : q.roundName || copy('tagline'), width / 2, height - 61);
+  ctx.fillStyle = '#8794b4'; ctx.font = '22px system-ui'; ctx.fillText(state.phase === 'intro' ? copy('subtitle') : q.roundName || copy('tagline'), width / 2, height - 61);
 }
 
 function drawPodium(ctx, canvas, participant = {}) {
   ctx.fillStyle = '#0d132b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#' + COLORS[(participant.index || 0) % 4].toString(16); ctx.font = '600 26px Arial';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#' + COLORS[(participant.index || 0) % 4].toString(16); ctx.font = '600 26px system-ui';
   if (participant.final) {
-    ctx.fillStyle = ['#ffd38a','#b9d5ed','#e7b08a','#bfa8ed'][(participant.rank || 1)-1] || '#bfa8ed'; ctx.font = '800 130px Arial'; ctx.fillText(String(participant.rank || 1), canvas.width / 2, 126);
-    ctx.fillStyle = '#eef0ff'; ctx.font = '600 30px Arial'; ctx.fillText(String(participant.name || '').slice(0,24), canvas.width / 2, 179);
-    ctx.font = '700 40px Arial'; ctx.fillText(String(participant.score || 0), canvas.width / 2, 231); return;
+    ctx.fillStyle = ['#ffd38a','#b9d5ed','#e7b08a','#bfa8ed'][(participant.rank || 1)-1] || '#bfa8ed'; ctx.font = '800 130px system-ui'; ctx.fillText(String(participant.rank || 1), canvas.width / 2, 126);
+    ctx.fillStyle = '#eef0ff'; ctx.font = '600 30px system-ui'; ctx.fillText(String(participant.name || '').slice(0,24), canvas.width / 2, 179);
+    ctx.font = '700 40px system-ui'; ctx.fillText(String(participant.score || 0), canvas.width / 2, 231); return;
   }
   ctx.fillText(`${String((participant.index || 0) + 1).padStart(2, '0')}  ${participant.isBot ? copy('bot') : copy('player')}`, canvas.width / 2, 44);
-  if(typeof participant.outcome==='boolean'){ctx.fillStyle=participant.outcome?'#46e69a':'#ff536d';ctx.font='700 28px Arial';ctx.fillText((participant.outcome?'✓ ':'× ')+copy(participant.outcome?'correct':'wrong'),canvas.width/2,244);}
-  ctx.fillStyle = '#eef0ff'; ctx.font = '600 42px Arial'; ctx.fillText(String(participant.name || copy('participant')).slice(0, 18), canvas.width / 2, 101);
-  ctx.font = '700 84px Arial'; ctx.fillText(String(participant.score || 0), canvas.width / 2, 202);
+  if(typeof participant.outcome==='boolean'){ctx.fillStyle=participant.outcome?'#46e69a':'#ff536d';ctx.font='700 28px system-ui';ctx.fillText((participant.outcome?'✓ ':'× ')+copy(participant.outcome?'correct':'wrong'),canvas.width/2,244);}
+  ctx.fillStyle = '#eef0ff'; ctx.font = '600 42px system-ui'; ctx.fillText(String(participant.name || copy('participant')).slice(0, 18), canvas.width / 2, 101);
+  ctx.font = '700 84px system-ui'; ctx.fillText(String(participant.score || 0), canvas.width / 2, 202);
+}
+
+function makeStickerTexture(mood) {
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const colors = { happy: '#ffd76a', sad: '#a9c7ff', thinking: '#c2a4ff', surprised: '#ff9f79', sparkle: '#ffe99a' };
+  ctx.shadowColor = '#080b20'; ctx.shadowBlur = 12; ctx.fillStyle = colors[mood] || colors.happy;
+  ctx.beginPath(); ctx.arc(64, 64, 49, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#fff8e9'; ctx.lineWidth = 6; ctx.stroke();
+  ctx.fillStyle = '#342747';
+  if (mood === 'thinking') {
+    [48, 64, 80].forEach((x, i) => { ctx.beginPath(); ctx.arc(x, 54 + (i % 2) * 3, 4, 0, Math.PI * 2); ctx.fill(); });
+  } else if (mood === 'surprised') {
+    [[48, 52], [80, 52]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); });
+    ctx.beginPath(); ctx.arc(64, 78, 9, 0, Math.PI * 2); ctx.fill();
+  } else {
+    [[48, 54], [80, 54]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); });
+    ctx.strokeStyle = '#342747'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath();
+    ctx.arc(64, mood === 'sad' ? 87 : 65, 22, mood === 'sad' ? Math.PI : 0, mood === 'sad' ? Math.PI * 2 : Math.PI); ctx.stroke();
+  }
+  if (mood === 'sparkle') {
+    ctx.fillStyle = '#fff'; [[25, 34, 7], [102, 36, 6], [98, 100, 5]].forEach(([x, y, r]) => {
+      ctx.beginPath(); for (let i = 0; i < 8; i++) { const angle = i * Math.PI / 4 - Math.PI / 2, radius = i % 2 ? r * .35 : r; ctx.lineTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius); } ctx.closePath(); ctx.fill();
+    });
+  }
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
 }
 
 // These are original skeletal gesture clips. The licensed source locomotion is retained.
@@ -686,6 +759,8 @@ function makeGestureClips(model) {
     point: { head: [0, .55, -.06], spine: [0, .2, 0], leftArm: [-.2, .3, -1.15], leftForearm: [-.4, 0, 0] },
     reaction: { head: [-.12, -.15, 0], spine: [-.05, -.12, 0], leftArm: [-.15, 0, -.55], rightArm: [-.15, 0, .55], leftForearm: [-.8, 0, 0], rightForearm: [-.8, 0, 0] },
     results: { head: [-.1, -.15, 0], spine: [-.07, -.15, 0], leftArm: [0, .15, -1.05], rightArm: [0, -.15, 1.05], leftForearm: [-.4, 0, 0], rightForearm: [-.4, 0, 0] },
+    talk: { head: [.08, -.08, 0], spine: [.025, 0, 0], rightArm: [-.15, 0, .25], rightForearm: [-.45, 0, 0], leftArm: [0, 0, -.08] },
+    clap: { head: [-.08, 0, 0], spine: [-.04, 0, 0], leftArm: [-.3, 0, -.72], rightArm: [-.3, 0, .72], leftForearm: [-.9, 0, .1], rightForearm: [-.9, 0, -.1] },
   };
   model.updateMatrixWorld(true);
   return Object.entries(poses).map(([name, pose]) => {

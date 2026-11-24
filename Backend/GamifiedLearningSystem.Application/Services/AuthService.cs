@@ -16,7 +16,7 @@ public sealed class AuthService(IDataRepository data, ITokenIssuer tokens, IConf
     public async Task<JsonNode> RegisterAsync(RegisterRequest r, CancellationToken ct) {
         await new RegisterValidator().ValidateAndThrowAsync(r, ct);
         var email = r.Email.Trim().ToLowerInvariant();
-        var user = await data.SendAsync(HttpMethod.Post, "auth/register", new { email, passwordHash=hasher.HashPassword(email, r.Password), r.FirstName, r.LastName }, ct);
+        var user = await data.SendAsync(HttpMethod.Post, "auth/register", new { email, passwordHash=hasher.HashPassword(email, r.Password), r.FirstName, r.LastName, r.Role }, ct);
         return await IssueAsync(user, false, ct);
     }
     public async Task<JsonNode> LoginAsync(LoginRequest r, CancellationToken ct) {

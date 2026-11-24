@@ -30,7 +30,7 @@ async function write(tx:Prisma.TransactionClient,row:any,state:ShowState,extra:a
  if(updated.count!==1)throw new HttpError(409,'Show changed. Refresh the session.');
  return {...row,...extra,state:JSON.stringify(state),version:row.version+1};
 }
-async function available(db:any,studentId:string,courseId:string,topicId:string|null){
+async function available(db:any,studentId:string,courseId:string,topicId:string|null,checkEntryRequirements=true){
  if(!PREPARED_COURSE_IDS.includes(courseId))throw new HttpError(400,'Bot shows use prepared studio courses only.');
  const [student,course,completed]=await Promise.all([
   db.student.findUnique({where:{id:studentId}}),
@@ -38,6 +38,12 @@ async function available(db:any,studentId:string,courseId:string,topicId:string|
   db.attempt.findMany({where:{studentId,isCorrect:true},distinct:['taskId'],select:{taskId:true}}),
  ]);
  if(!student||!course)throw new HttpError(404,'Published course not found.');
+ if(checkEntryRequirements){
+  const enrollment=await db.courseEnrollment.findUnique({where:{studentId_courseId:{studentId,courseId}},select:{studentId:true}});
+  if(!enrollment)throw new HttpError(403,'Purchase this course with coins before starting its show quiz.');
+  const materialCount=await db.courseMaterial.count({where:{courseId}});
+  if(materialCount){const completedMaterials=await db.studentMaterialProgress.count({where:{studentId,material:{courseId}}});if(completedMaterials<materialCount)throw new HttpError(403,'Read or watch every course lesson before starting its show quiz.');}
+ }
  if(topicId&&!course.topics.some((t:any)=>t.id===topicId))throw new HttpError(400,'Topic does not belong to this course.');
  const tasks:any[]=unlockedShowTasks(course.levels,student.totalXP,completed.map((a:any)=>a.taskId),topicId);
  if(!tasks.length)throw new HttpError(403,'This topic has no unlocked show tasks. Complete earlier levels first.');
@@ -63,15 +69,17 @@ export async function showCatalog(studentId:string,requestedLanguage?:unknown){
  const language=showLanguage(requestedLanguage);
  const student=await prisma.student.findUnique({where:{id:studentId}});if(!student)throw new HttpError(403,'A student account is required.');
  const [courses,completed]=await Promise.all([
-  prisma.course.findMany({where:{isPublished:true,id:{in:PREPARED_COURSE_IDS}},include:{topics:{select:{id:true,name:true}},levels:{orderBy:{order:'asc'},include:{tasks:{select:{id:true,topicId:true,taskType:true,options:{select:{id:true}}}}}}},orderBy:{createdAt:'desc'}}),
+  prisma.course.findMany({where:{isPublished:true,id:{in:PREPARED_COURSE_IDS},enrollments:{some:{studentId}}},include:{topics:{select:{id:true,name:true}},materials:{select:{id:true}},levels:{orderBy:{order:'asc'},include:{tasks:{select:{id:true,topicId:true,taskType:true,options:{select:{id:true}}}}}}},orderBy:{createdAt:'desc'}}),
   prisma.attempt.findMany({where:{studentId,isCorrect:true},distinct:['taskId'],select:{taskId:true}})
  ]);
  const completedIds=completed.map(attempt=>attempt.taskId);
+ const materialProgress=await prisma.studentMaterialProgress.findMany({where:{studentId,material:{courseId:{in:courses.map(course=>course.id)}}},select:{material:{select:{courseId:true}}}});
  const availableCourses=courses.flatMap(course=>{
   const tasks=unlockedShowTasks(course.levels,student.totalXP,completedIds);
   if(!hasClassicRound(tasks))return [];
+  const materialsCompleted=materialProgress.filter(progress=>progress.material.courseId===course.id).length;
   return [{id:course.id,title:course.title,description:course.description,category:course.category,...preparedCourseLocale(course.id,language),
-   topics:course.topics.filter(topic=>hasClassicRound(tasks.filter(task=>task.topicId===topic.id))).map(topic=>({...topic,name:preparedTopicName(topic.id,course.id,language)??topic.name})),taskCount:tasks.length}];
+   topics:course.topics.filter(topic=>hasClassicRound(tasks.filter(task=>task.topicId===topic.id))).map(topic=>({...topic,name:preparedTopicName(topic.id,course.id,language)??topic.name})),taskCount:tasks.length,materialsReady:course.materials.length===0||materialsCompleted>=course.materials.length}];
  });
  return {title:'Лига знаний',characters:CHARACTERS,host:{id:'orion',name:'Марк'},rounds:ROUND_SCHEDULE.map((id,index)=>({id,index,...ROUND_RULES[id]})),
   courses:availableCourses,questionCount:ROUND_SCHEDULE.length};
@@ -115,7 +123,8 @@ export async function showNext(id:string,b:any){
   if(state.phase!=='intro'&&state.phase!=='feedback')throw new HttpError(409,'Answer the current question first.');
   const index=state.phase==='intro'?0:state.questionIndex+1;
   if(index>=ROUND_SCHEDULE.length)return row;
-  const {tasks}=await available(tx,b.studentId,row.courseId,state.topicId);
+  // Entry requirements are checked when the session starts; don't block an active show mid-session.
+  const {tasks}=await available(tx,b.studentId,row.courseId,state.topicId,false);
   const [attempts,weak,previousShows]=await Promise.all([tx.attempt.findMany({where:{studentId:b.studentId},orderBy:{createdAt:'desc'},take:30,include:{task:{select:{difficulty:true,timeLimit:true}}}}),tx.studentTopicProgress.findMany({where:{studentId:b.studentId}}),tx.showSession.findMany({where:{studentId:b.studentId},orderBy:{updatedAt:'desc'},take:10,select:{state:true}})]);
   const hints=attempts.length?await tx.hint.findMany({where:{studentId:b.studentId,taskId:{in:attempts.map(a=>a.taskId)},createdAt:{gte:new Date(attempts[attempts.length-1].createdAt.getTime()-3600000)}}}):[];
   const observations=new Map<string,any>(previousShows.flatMap(s=>parse(s).history.map(h=>[h.requestId,h] as [string,any])));
@@ -177,7 +186,8 @@ export async function showSnapshot(id:string,b:any){
  if(Date.now()<Date.parse(q.startedAt))throw new HttpError(409,'Wait for the question presentation to finish.');
  const wager=effectiveWager(q.round,b.wager,q.wager,state.participants[0].score);
  if(wager===null)throw new HttpError(400,'Answer wager must match the committed stake.');
- const game=await snapshot({studentId:b.studentId,taskId:q.taskId,sessionId:q.taskSessionId,requestId:b.requestId});
+ // The show session already passed the lesson gate at start; do not apply the course-test gate to its answers.
+ const game=await snapshot({studentId:b.studentId,taskId:q.taskId,sessionId:q.taskSessionId,requestId:b.requestId},{checkMaterials:false});
  if('replayed' in game)throw new HttpError(409,'Request ID was already used by another learning attempt.');
  const receivedAt=new Date().toISOString(),timedOut=Date.parse(receivedAt)>=Date.parse(q.deadline);
  const isCorrect=!timedOut&&checkShowAnswer(game.task,canonicalShowAnswer(game.task,b.answer,showLanguage(b.language,state.language??'ru')));

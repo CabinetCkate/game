@@ -3,7 +3,8 @@ import {prisma,HttpError} from '../prisma';
 export const auth=Router();
 auth.post('/register',async(req,res,next)=>{try{
  const {email,passwordHash,firstName,lastName}=req.body;
- const user=await prisma.user.create({data:{email,passwordHash,student:{create:{firstName,lastName}}},include:{student:true}});res.json(user);
+ const role=req.body.role==='TEACHER'?'TEACHER':'STUDENT';
+ const user=await prisma.user.create({data:{email,passwordHash,role,...(role==='STUDENT'?{student:{create:{firstName,lastName}}}:{teacher:{create:{firstName,lastName}}})},include:{student:true}});res.json(user);
 }catch(e){next(e);}});
 auth.post('/find',async(req,res,next)=>{try{res.json(await prisma.user.findUnique({where:{email:req.body.email},include:{student:true}})??{});}catch(e){next(e);}});
 auth.post('/token',async(req,res,next)=>{try{await prisma.refreshToken.create({data:{...req.body,expiresAt:new Date(req.body.expiresAt)}});res.json({ok:true});}catch(e){next(e);}});

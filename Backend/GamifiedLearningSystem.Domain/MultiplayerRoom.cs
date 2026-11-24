@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace GamifiedLearningSystem.Domain;
 
 public sealed class GameRuleException(string code) : Exception(code);
@@ -7,10 +10,12 @@ public record QuizPlayerView(string Id, string Name, int Score, bool Connected, 
 public record QuizQuestionView(string Id, string Title, string Question, List<QuizOption> Options);
 public record QuizRoomView(string Code, long Revision, string HostId, string CourseTitle, string Status, int RoundIndex, int QuestionCount,
     int RoundSeconds, DateTimeOffset ServerNow, DateTimeOffset? Deadline, List<QuizPlayerView> Players,
-    QuizQuestionView? Question, string? OwnAnswerId, bool? OwnCorrect, DateTimeOffset? AnswerOpensAt, string Language, string? CorrectOptionId, int? OwnPoints = null, bool IsSolo = false);
+    QuizQuestionView? Question, string? OwnAnswerId, bool? OwnCorrect, DateTimeOffset? AnswerOpensAt, string Language, string? CorrectOptionId, int? OwnPoints = null, bool IsSolo = false,
+    bool IsAudience = false, int AudienceCount = 0, int AudienceScore = 0, string? OwnAudienceVoteId = null, bool? AudienceCorrect = null,
+    string? AudienceAnswerId = null, Dictionary<string, int>? AudienceVoteCounts = null, string InviteToken = "");
 
 // All mutation and snapshots are serialized by MultiplayerService. Answers never enter a public DTO.
-public sealed class MultiplayerRoom(string code, string hostId, string courseTitle, List<QuizQuestion> questions, int roundSeconds, DateTimeOffset now, int presentationSeconds = 0, string language = "en", bool prepareLanguagesBeforeStart = false)
+public sealed class MultiplayerRoom(string code, string hostId, string courseTitle, List<QuizQuestion> questions, int roundSeconds, DateTimeOffset now, int presentationSeconds = 0, string language = "en", bool prepareLanguagesBeforeStart = false, string inviteToken = "")
 {
     public sealed class Player(string id, string name)
     {
@@ -28,6 +33,10 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     private record Answer(string OptionId, bool Correct, int Points);
     private readonly Dictionary<string, Answer> answers = [];
     private readonly Dictionary<string, (DateTimeOffset At, string Option)> botAnswers = [];
+    private readonly Dictionary<string, (DateTimeOffset At, string Option)> audienceVotes = [];
+    private string? audienceAnswerId;
+    private bool? audienceCorrect;
+    public int AudienceScore { get; private set; }
     public bool IsSolo { get; private set; }
     private readonly List<QuizQuestion> questions = questions;
     private readonly Dictionary<string, QuizTranslation> translations = new() { [language] = new(courseTitle, questions.Select(q => new QuizQuestionView(q.Id, q.Title, q.Question, q.Options)).ToList()) };
@@ -38,11 +47,13 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     public void AddTranslation(string locale, QuizTranslation translation) => translations[locale] = translation;
     public void SetLanguage(string id, string locale, DateTimeOffset time)
     {
-        if (!Players.TryGetValue(id, out var player)) throw new GameRuleException("notInRoom");
+        if (!TryGetMember(id, out var player, out _)) throw new GameRuleException("notInRoom");
         if (!HasLanguage(locale)) throw new GameRuleException("translationFailed");
         player.Language = locale; UpdatedAt = time; Revision++;
     }
     public string Code { get; } = code;
+    public string InviteToken { get; } = inviteToken;
+    public bool HasValidInvite(string? token) => token is not null && token.Length == InviteToken.Length && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(token), Encoding.UTF8.GetBytes(InviteToken));
     public long Revision { get; private set; }
     public string HostId { get; private set; } = hostId;
     public string Status { get; private set; } = "lobby";
@@ -53,18 +64,35 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     public DateTimeOffset CreatedAt { get; } = now;
     public DateTimeOffset UpdatedAt { get; private set; } = now;
     public Dictionary<string, Player> Players { get; } = [];
+    public Dictionary<string, Player> Audience { get; } = [];
+    public bool ContainsMember(string id) => Players.ContainsKey(id) || Audience.ContainsKey(id);
+    private bool TryGetMember(string id, out Player player, out bool isAudience)
+    {
+        if (Players.TryGetValue(id, out player!)) { isAudience = false; return true; }
+        if (Audience.TryGetValue(id, out player!)) { isAudience = true; return true; }
+        isAudience = false; return false;
+    }
+    public void SetAvatarUrl(string id, string url)
+    {
+        if (Players.TryGetValue(id, out var player)) player.AvatarUrl = url;
+    }
 
     public void Join(string id, string name, string connection, DateTimeOffset time, string? avatarId = null)
     {
-        if (IsSolo && !Players.ContainsKey(id)) throw new GameRuleException("roomNotFound");
-        if (!Players.TryGetValue(id, out var player))
+        if (!TryGetMember(id, out var player, out var isAudience))
         {
-            if (Status != "lobby") throw new GameRuleException("gameStarted");
-            if (Players.Count >= 8) throw new GameRuleException("roomFull");
-            var seat = Enumerable.Range(0, 8).First(i => Players.Values.All(p => p.Seat != i));
-            player = new(id, name) { Seat = seat, Language = language, AvatarId = new[] { "nova", "leo", "maya", "atlas" }[seat % 4] }; Players.Add(id, player);
+            if (Status == "lobby" && Players.Count < 4)
+            {
+                var seat = Enumerable.Range(0, 4).First(index => Players.Values.All(player => player.Seat != index));
+                player = new(id, name) { Seat = seat, Language = language, AvatarId = new[] { "nova", "leo", "maya", "atlas" }[seat % 4] }; Players.Add(id, player);
+            }
+            else
+            {
+                player = new(id, name) { Seat = -1, Language = language };
+                Audience.Add(id, player); isAudience = true;
+            }
         }
-        if (Status == "lobby" && avatarId is "nova" or "leo" or "maya" or "atlas") player.AvatarId = avatarId;
+        if (!isAudience && Status == "lobby" && avatarId is ("nova" or "leo" or "maya" or "atlas")) player.AvatarId = avatarId;
         player.Connections.Add(connection); player.DisconnectedAt = null; UpdatedAt = time; Revision++;
     }
     public void AddBots(DateTimeOffset time)
@@ -81,23 +109,17 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     }
     public void Disconnect(string connection, DateTimeOffset time)
     {
-        foreach (var player in Players.Values.Where(p => p.Connections.Remove(connection)))
+        foreach (var player in Players.Values.Concat(Audience.Values).Where(p => p.Connections.Remove(connection)))
             if (player.Connections.Count == 0) player.DisconnectedAt = time;
-        TransferHost();
         Revision++;
     }
-    public void Leave(string id, DateTimeOffset time) { Players.Remove(id); UpdatedAt = time; TransferHost(); Revision++; }
+    public void Leave(string id, DateTimeOffset time) { Players.Remove(id); Audience.Remove(id); audienceVotes.Remove(id); UpdatedAt = time; Revision++; }
     public void SelectCharacter(string id, string avatarId, DateTimeOffset time)
     {
         if (!Players.TryGetValue(id, out var player)) throw new GameRuleException("notInRoom");
         if (Status != "lobby") throw new GameRuleException("gameStarted");
         if (avatarId is not ("nova" or "leo" or "maya" or "atlas")) throw new GameRuleException("invalidCharacter");
         player.AvatarId = avatarId; UpdatedAt = time; Revision++;
-    }
-    private void TransferHost()
-    {
-        if (!Players.TryGetValue(HostId, out var host) || host.Connections.Count == 0)
-            HostId = Players.Values.FirstOrDefault(p => !p.IsBot && p.Connections.Count > 0)?.Id ?? Players.Values.FirstOrDefault(p => !p.IsBot)?.Id ?? "";
     }
     public void Start(string id, DateTimeOffset time)
     {
@@ -115,7 +137,7 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     private void RequireHost(string id) { if (HostId != id) throw new GameRuleException("hostOnly"); }
     private void Next(DateTimeOffset time)
     {
-        RoundIndex++; answers.Clear(); UpdatedAt = time; Revision++;
+        RoundIndex++; answers.Clear(); audienceVotes.Clear(); audienceAnswerId = null; audienceCorrect = null; UpdatedAt = time; Revision++;
         botAnswers.Clear();
         Status = RoundIndex >= questions.Count ? "finished" : presentationSeconds > 0 ? "preview" : "question";
         AnswerOpensAt = Status == "finished" ? null : time.AddSeconds(presentationSeconds);
@@ -130,11 +152,17 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     }
     public void Submit(string id, string questionId, string optionId, DateTimeOffset time)
     {
-        if (!Players.TryGetValue(id, out var player)) throw new GameRuleException("notInRoom");
+        if (!TryGetMember(id, out _, out var isAudience)) throw new GameRuleException("notInRoom");
         if (Status != "question" || time >= Deadline) throw new GameRuleException("roundClosed");
         var question = questions[RoundIndex];
         if (question.Id != questionId) throw new GameRuleException("roundClosed");
         var option = question.Options.Find(o => o.Id == optionId) ?? throw new GameRuleException("invalidAnswer");
+        if (isAudience)
+        {
+            audienceVotes[id] = (time, option.Id);
+            UpdatedAt = time; Revision++;
+            return;
+        }
         if (answers.TryGetValue(id, out var previous) && previous.OptionId == optionId) return;
         var correct = string.Equals(option.Text.Trim(), question.CorrectAnswer.Trim(), StringComparison.OrdinalIgnoreCase);
         // The latest selection replaces the previous one until the deadline.
@@ -157,14 +185,23 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     private void EndRound(DateTimeOffset time)
     {
         foreach (var player in Players.Values) if (answers.TryGetValue(player.Id, out var answer)) player.Score += answer.Points;
+        var question = questions[RoundIndex];
+        var winningVote = audienceVotes.Values.GroupBy(vote => vote.Option).OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Min(vote => vote.At)).ThenBy(group => group.Key, StringComparer.Ordinal).FirstOrDefault();
+        if (winningVote is not null)
+        {
+            audienceAnswerId = winningVote.Key;
+            audienceCorrect = string.Equals(question.Options.Single(option => option.Id == audienceAnswerId).Text.Trim(), question.CorrectAnswer.Trim(), StringComparison.OrdinalIgnoreCase);
+            if (audienceCorrect.Value) AudienceScore += 1000;
+        }
         Status = "results"; Deadline = time.AddSeconds(6); UpdatedAt = time; Revision++;
     }
     public bool Tick(DateTimeOffset time)
     {
         var changed = false;
-        foreach (var id in Players.Values.Where(p => p.DisconnectedAt is { } at && time - at > TimeSpan.FromSeconds(90)).Select(p => p.Id).ToList())
-        { Players.Remove(id); changed = true; }
-        if (changed) { TransferHost(); Revision++; }
+        foreach (var id in Players.Values.Concat(Audience.Values).Where(p => p.DisconnectedAt is { } at && time - at > TimeSpan.FromSeconds(90)).Select(p => p.Id).ToList())
+        { Players.Remove(id); Audience.Remove(id); audienceVotes.Remove(id); changed = true; }
+        if (changed) Revision++;
         if (Status == "preview" && time >= AnswerOpensAt) { Status = "question"; Revision++; changed = true; }
         if (Status == "question") foreach (var bot in botAnswers.Where(b => b.Value.At <= time && !answers.ContainsKey(b.Key)).ToList())
         {
@@ -177,15 +214,21 @@ public sealed class MultiplayerRoom(string code, string hostId, string courseTit
     }
     public QuizRoomView View(string id, DateTimeOffset time)
     {
-        if (!Players.ContainsKey(id)) throw new GameRuleException("notInRoom");
+        if (!TryGetMember(id, out var member, out var isAudience)) throw new GameRuleException("notInRoom");
         var question = Status is "preview" or "question" or "results" ? questions[RoundIndex] : null;
         answers.TryGetValue(id, out var own);
-        var playerLanguage = Players[id].Language;
+        audienceVotes.TryGetValue(id, out var ownVote);
+        var playerLanguage = member.Language;
         var display = translations[playerLanguage];
         var revealed = Status == "results";
+        var voteCounts = revealed ? audienceVotes.Values.GroupBy(vote => vote.Option).ToDictionary(group => group.Key, group => group.Count()) : null;
+        var ownVoteCorrect = revealed && ownVote.Option is not null && question is not null
+            ? string.Equals(question.Options.Single(option => option.Id == ownVote.Option).Text.Trim(), question.CorrectAnswer.Trim(), StringComparison.OrdinalIgnoreCase)
+            : (bool?)null;
         return new(Code, Revision, HostId, display.CourseTitle, Status, RoundIndex, questions.Count, RoundSeconds, time, Deadline,
             Players.Values.OrderByDescending(p => p.Score).ThenBy(p => p.Seat).Select(p => new QuizPlayerView(p.Id, p.Name, p.Score, p.Connections.Count > 0, answers.ContainsKey(p.Id), p.AvatarId, p.Seat, revealed ? answers.GetValueOrDefault(p.Id)?.Correct ?? false : null, p.AvatarUrl, p.IsBot)).ToList(),
-            question is null ? null : display.Questions.Single(q => q.Id == question.Id), own?.OptionId, revealed ? own?.Correct ?? false : null, AnswerOpensAt,
-            playerLanguage, revealed ? question?.Options.Single(o => string.Equals(o.Text.Trim(), question.CorrectAnswer.Trim(), StringComparison.OrdinalIgnoreCase)).Id : null, revealed ? own?.Points ?? 0 : null, IsSolo);
+            question is null ? null : display.Questions.Single(q => q.Id == question.Id), own?.OptionId, revealed ? (isAudience ? ownVoteCorrect : own?.Correct ?? false) : null, AnswerOpensAt,
+            playerLanguage, revealed ? question?.Options.Single(o => string.Equals(o.Text.Trim(), question.CorrectAnswer.Trim(), StringComparison.OrdinalIgnoreCase)).Id : null, revealed ? own?.Points ?? 0 : null, IsSolo,
+            isAudience, Audience.Values.Count(p => p.Connections.Count > 0), AudienceScore, ownVote.Option, ownVoteCorrect, audienceAnswerId, voteCounts, Status == "lobby" ? InviteToken : "");
     }
 }

@@ -4,13 +4,14 @@ export async function courses(studentId:string,id?:string){
  const completed=studentId?await prisma.attempt.findMany({where:{studentId,isCorrect:true},distinct:['taskId'],select:{taskId:true}}):[];
  const done=new Set(completed.map(a=>a.taskId));
  const student=studentId?await prisma.student.findUnique({where:{id:studentId}}):null;
- const list=await prisma.course.findMany({where:{isPublished:true,...(id?{id}:{})},include:{levels:{orderBy:{order:'asc'},include:{tasks:{orderBy:{order:'asc'},include:{options:{orderBy:{order:'asc'}}}}}}},orderBy:{createdAt:'asc'}});
- return list.map(c=>{let priorComplete=true;return {...c,levels:c.levels.map(l=>{
+ const list=await prisma.course.findMany({where:{isPublished:true,...(id?{id}:{})},include:{materials:{orderBy:{order:'asc'},include:{progress:{where:{studentId},select:{studentId:true}}}},levels:{orderBy:{order:'asc'},include:{tasks:{orderBy:{order:'asc'},include:{options:{orderBy:{order:'asc'}}}}}},enrollments:{where:{studentId},select:{studentId:true}},reviews:{orderBy:{createdAt:'desc'},take:30,include:{student:{select:{firstName:true,lastName:true}}}}},orderBy:{createdAt:'asc'}});
+ const ratings=await prisma.courseReview.groupBy({by:['courseId'],where:{courseId:{in:list.map(course=>course.id)}},_avg:{rating:true},_count:{rating:true}});
+ return list.map(c=>{let priorComplete=true;const owned=!!student&&c.enrollments.length>0;const materials=c.materials.map(({progress,...material})=>({...material,completed:progress.length>0}));const materialsCompleted=materials.filter(m=>m.completed).length;const materialsReady=materialsCompleted===materials.length;const reviews=c.reviews;const rating=ratings.find(entry=>entry.courseId===c.id);const averageRating=rating?Math.round((rating._avg.rating??0)*10)/10:0;return {...c,enrolled:owned,canReview:owned,averageRating,reviewCount:rating?rating._count.rating:0,reviews:reviews.map(r=>({rating:r.rating,comment:r.comment,createdAt:r.createdAt,studentName:`${r.student.firstName} ${r.student.lastName}`.trim(),isMine:r.studentId===studentId})),materials:owned?materials:[],materialsCompleted:owned?materialsCompleted:0,materialsTotal:c.materials.length,materialsReady:owned&&materialsCompleted===c.materials.length,levels:owned?c.levels.map(l=>{
   const locked=!priorComplete||(student?.totalXP??0)<l.requiredXP;
   const count=l.tasks.filter(t=>done.has(t.id)).length;
   priorComplete=priorComplete&&count===l.tasks.length;
-  return {...l,isLocked:locked,completed:count,tasks:l.tasks.map(t=>({...safeTask(t),completed:done.has(t.id),isLocked:locked}))};
- }),completed:c.levels.flatMap(l=>l.tasks).filter(t=>done.has(t.id)).length,taskCount:c.levels.reduce((n,l)=>n+l.tasks.length,0),totalXP:c.levels.flatMap(l=>l.tasks).reduce((n,t)=>n+t.xpReward,0)};});
+  return {...l,isLocked:locked||!materialsReady,completed:count,tasks:l.tasks.map(t=>({...safeTask(t),completed:done.has(t.id),isLocked:locked||!materialsReady}))};
+ }):[],completed:owned?c.levels.flatMap(l=>l.tasks).filter(t=>done.has(t.id)).length:0,taskCount:c.levels.reduce((n,l)=>n+l.tasks.length,0),totalXP:c.levels.flatMap(l=>l.tasks).reduce((n,t)=>n+t.xpReward,0)};});
 }
 export async function statistics(studentId:string){
  const [student,attempts,events,topicProgress,achievements]=await Promise.all([

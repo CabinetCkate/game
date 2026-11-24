@@ -90,7 +90,8 @@ Check(room.View("two",clock).OwnCorrect==false&&room.View("two",clock).Players.A
 room.NextRound("one",clock.AddSeconds(47));
 Check(room.Status=="finished"&&room.View("one",clock).Question==null,"The match ends after the configured questions");
 var reconnect=Room();reconnect.Join("one","One","c1",clock);reconnect.Join("two","Two","c2",clock);reconnect.Start("one",clock);reconnect.Submit("one","q1","a",clock.AddSeconds(1));reconnect.Disconnect("c1",clock.AddSeconds(2));
-Check(reconnect.HostId=="two","An online player inherits the host when the host disconnects");
+Check(reconnect.HostId=="one","The room creator keeps ownership when disconnecting");
+Rule(()=>reconnect.Start("two",clock.AddSeconds(3)),"hostOnly","A different player cannot start a match after the creator disconnects");
 reconnect.Join("one","One","new-c1",clock.AddSeconds(3));
 Check(reconnect.Players.Count==2&&reconnect.Players["one"].Score==0&&reconnect.View("one",clock).OwnAnswerId=="a"&&reconnect.View("one",clock).OwnCorrect==null,"Reconnection preserves the submitted answer without prematurely disclosing correctness or points");
 Check(reconnect.View("two",clock).Players.Select(p=>p.Id).SequenceEqual(new[]{"one","two"}),"Correct submissions cannot change the public leaderboard order before reveal");
@@ -100,8 +101,8 @@ Check(reconnect.Players["one"].Score==1475&&reconnect.View("two",clock).Players.
 var leaving=Room();leaving.Join("one","One","c1",clock);leaving.Join("two","Two","c2",clock);leaving.Join("three","Three","c3",clock);leaving.Start("one",clock);leaving.Submit("one","q1","a",clock.AddSeconds(1));leaving.Leave("one",clock.AddSeconds(2));leaving.Submit("two","q1","a",clock.AddSeconds(3));
 Check(leaving.Status=="question","An answer from a player who left cannot end the round before remaining players answer");
 Check(leaving.View("two",clock).Revision>0,"Snapshots carry a revision to reject out-of-order multiplayer updates");
-var full=Room();for(var i=0;i<8;i++)full.Join(i.ToString(),"Player "+i,"connection"+i,clock);
-Rule(()=>full.Join("ninth","Ninth","c9",clock),"roomFull","Rooms have a maximum of eight players");
+var full=Room();for(var i=0;i<16;i++)full.Join(i.ToString(),"Player "+i,"connection"+i,clock);
+Check(full.Players.Count==16,"Online rooms have no eight-player cap");
 Console.WriteLine($"{count} domain checks passed.");
 var studioRoom=new MultiplayerRoom("TV2345","one","Text quiz",[Question("q1"),Question("q2")],10,clock,4);
 studioRoom.Join("one","One","c1",clock,"maya");studioRoom.Join("two","Two","c2",clock,"leo");studioRoom.Start("one",clock);

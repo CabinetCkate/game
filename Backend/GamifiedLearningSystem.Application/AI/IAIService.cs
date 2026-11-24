@@ -9,4 +9,5 @@ public interface IAIService
     Task<JsonNode> GenerateTaskAsync(JsonNode specification, CancellationToken ct);
     Task<JsonNode> GenerateQuizAsync(string title, string sourceText, int count, CancellationToken ct);
     Task<QuizTranslation> TranslateQuizAsync(string title, List<QuizQuestionView> questions, string language, CancellationToken ct);
+    Task<JsonNode> TutorAsync(string message, string language, CancellationToken ct);
 }

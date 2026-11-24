@@ -14,6 +14,7 @@ export function createShowSoundtrack(initial={}){
  let settings={volume:.3,muted:false,...initial},phase='intro',options={},unlocked=false,disposed=false;
  let music=null,clip=null,musicKey='',musicPlaying=false,clipPlaying=false,version=0,clipVersion=0,finaleTimer=null;
  const level=()=>settings.muted?0:Math.max(0,Math.min(1,Number(settings.volume)||0));
+ const makeAudio=()=>{const element=new Audio();element.preload='auto';element.playsInline=true;element.setAttribute('playsinline','');element.setAttribute('webkit-playsinline','');return element;};
  const desiredMusic=()=>phase==='intro'?(options.selectingCharacter?'characters':'menu'):phase==='results'||options.finalRound?'final':'gameplay';
  function volumes(){
   if(music){music.muted=!!settings.muted;music.volume=level()*(clipPlaying?.12:.42);}
@@ -22,7 +23,7 @@ export function createShowSoundtrack(initial={}){
  function stopClip(){clipVersion++;if(clip){clip.pause();clip.currentTime=0;}clipPlaying=false;volumes();}
  function syncMusic(){
   if(!unlocked||disposed||typeof globalThis.Audio!=='function')return;
-  if(!music){music=new Audio();music.loop=true;music.preload='auto';music.onerror=()=>{musicPlaying=false;};}
+  if(!music){music=makeAudio();music.loop=true;music.onerror=()=>{musicPlaying=false;};}
   const next=desiredMusic();
   if(next!==musicKey){version++;music.pause();music.currentTime=0;musicPlaying=false;musicKey=next;music.src=SHOW_TRACKS[next];}
   volumes();
@@ -34,7 +35,7 @@ export function createShowSoundtrack(initial={}){
  function play(name){
   if(!unlocked||disposed||settings.muted||!SHOW_TRACKS[name]||typeof globalThis.Audio!=='function')return;
   stopClip();
-  if(!clip){clip=new Audio();clip.preload='auto';clip.onended=clip.onerror=()=>{clipPlaying=false;volumes();};}
+  if(!clip){clip=makeAudio();clip.onended=clip.onerror=()=>{clipPlaying=false;volumes();};}
   clip.src=SHOW_TRACKS[name];clip.currentTime=0;clipPlaying=true;volumes();const request=++clipVersion;
   try{Promise.resolve(clip.play()).catch(()=>{if(request===clipVersion){clipPlaying=false;volumes();}});}catch{clipPlaying=false;volumes();}
  }

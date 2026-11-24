@@ -4,10 +4,10 @@ import {randomUUID} from 'node:crypto';
 import {checkShowAnswer} from './show-rules';
 const readResult=(value:string)=>JSON.parse(value);
 
-export async function snapshot(b:any){
+export async function snapshot(b:any,options:{checkMaterials?:boolean}={}){
  const replay=await prisma.attempt.findUnique({where:{studentId_requestId:{studentId:b.studentId,requestId:b.requestId}}});
  if(replay){if(replay.taskId!==b.taskId)throw new HttpError(409,'Request ID belongs to another task.');return {replayed:readResult(replay.result)};}
- const {task,student}=await eligible(b.studentId,b.taskId);
+ const {task,student}=await eligible(b.studentId,b.taskId,options);
  const session=await prisma.taskSession.findUnique({where:{id:b.sessionId}});
  if(!session||session.studentId!==student.id||session.taskId!==task.id||session.submittedAt)throw new HttpError(409,'Start a new challenge session.');
  const [attempts,completed,achievements,unlocked,goals,streak,recent,hints,leaders]=await Promise.all([
@@ -47,10 +47,12 @@ export async function commitInTransaction(tx:Prisma.TransactionClient,p:any){
    const session=await tx.taskSession.findUnique({where:{id:p.sessionId}});
    if(!session||session.studentId!==p.studentId||session.taskId!==p.taskId||session.submittedAt)throw new HttpError(409,'Challenge session already submitted.');
    // C# is the trusted rules engine. This private service only accepts authenticated server plans.
-   const updated=await tx.student.updateMany({where:{id:p.studentId,version:p.expectedVersion},data:{totalXP:p.totalXP,level:p.level,currentStreak:p.currentStreak,longestStreak:p.longestStreak,
+   const coinsEarned=p.rewards.some((r:any)=>r.source==='TASK')?Math.floor(Math.max(0,p.xpEarned)/10):0;
+   const wallet=await tx.student.findUnique({where:{id:p.studentId},select:{coins:true}});if(!wallet)throw new HttpError(404,'Student not found.');
+   const updated=await tx.student.updateMany({where:{id:p.studentId,version:p.expectedVersion},data:{totalXP:p.totalXP,coins:{increment:coinsEarned},level:p.level,currentStreak:p.currentStreak,longestStreak:p.longestStreak,
     ...(p.rewards.some((r:any)=>r.source==='TASK')?{lastActivityAt:new Date()}:{}),version:{increment:1}}});
    if(updated.count!==1)throw new HttpError(409,'Progress changed.');
-   const result={isCorrect:p.isCorrect,score:p.score,xpEarned:p.xpEarned,totalXP:p.totalXP,level:p.level,currentStreak:p.currentStreak,achievements:p.achievements,explanation:p.explanation,requestId:p.requestId};
+   const result={isCorrect:p.isCorrect,score:p.score,xpEarned:p.xpEarned,coinsEarned,coins:wallet.coins+coinsEarned,totalXP:p.totalXP,level:p.level,currentStreak:p.currentStreak,achievements:p.achievements,explanation:p.explanation,requestId:p.requestId};
    await tx.taskSession.update({where:{id:p.sessionId},data:{submittedAt:new Date()}});
    await tx.attempt.create({data:{studentId:p.studentId,taskId:p.taskId,answer:p.answer,isCorrect:p.isCorrect,score:p.score,xpEarned:p.xpEarned,timeSpent:p.timeSpent,attemptNumber:p.attemptNumber,requestId:p.requestId,result:JSON.stringify(result)}});
    for(const r of p.rewards)await tx.xpEvent.create({data:{studentId:p.studentId,amount:r.amount,source:r.source,sourceId:r.sourceId}});

@@ -1,6 +1,6 @@
 // Bound both connection and response-body waits so forms can always recover.
 export async function request(url, options = {}) {
- const {timeoutMs = 20000, ...requestOptions} = options;
+ const {timeoutMs = 10000, ...requestOptions} = options;
  const controller = new AbortController();
  const timeout = setTimeout(() => controller.abort(), timeoutMs);
  const cancel = () => controller.abort();
